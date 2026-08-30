@@ -6,6 +6,7 @@ import "./learn-polish.css";
 import "./learn-shift.css";
 import "./learn-theory.css";
 import "./tour.css";
+import "./settings.css";
 import { Providers } from "./providers";
 import { SiteFooter } from "../components/site-footer";
 
