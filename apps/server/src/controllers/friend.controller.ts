@@ -1,0 +1,7 @@
+import type { NextFunction,Request,Response } from "express";import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";import * as service from "../services/friend.service.js";import { friendCodeSchema,friendInviteSchema } from "../validators/friend.validator.js";import { HttpError } from "../lib/http-error.js";
+function userId(request:Request){const req=request as AuthenticatedRequest;if(req.auth.role!=="user")throw new HttpError(403,"Registered account required");return req.auth.id}
+export async function list(req:Request,res:Response,next:NextFunction){try{res.json(await service.listFriends(userId(req)))}catch(error){next(error)}}
+export async function add(req:Request,res:Response,next:NextFunction){try{res.status(201).json(await service.addFriend(userId(req),friendCodeSchema.parse(req.body).code))}catch(error){next(error)}}
+export async function stats(req:Request,res:Response,next:NextFunction){try{res.json(await service.friendStats(userId(req),String(req.params.id)))}catch(error){next(error)}}
+export async function invite(req:Request,res:Response,next:NextFunction){try{res.status(201).json(await service.createFriendInvite(userId(req),String(req.params.id),friendInviteSchema.parse(req.body)))}catch(error){next(error)}}
+export async function invites(req:Request,res:Response,next:NextFunction){try{res.json({invites:await service.listInvites(userId(req))})}catch(error){next(error)}}

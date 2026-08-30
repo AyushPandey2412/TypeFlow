@@ -1,0 +1,2 @@
+import { Router } from "express";import { authenticate } from "../middleware/auth.middleware.js";import * as controller from "../controllers/friend.controller.js";
+export const friendRouter=Router();friendRouter.use(authenticate);friendRouter.get("/",controller.list);friendRouter.post("/",controller.add);friendRouter.get("/invites",controller.invites);friendRouter.get("/:id/stats",controller.stats);friendRouter.post("/:id/invite",controller.invite);
