@@ -1,0 +1,2 @@
+export function LoadingState({ label = "Loading..." }: { label?: string }) { return <p className="empty-state" role="status">{label}</p>; }
+export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) { const message = error instanceof Error ? error.message : "Something went wrong."; return <div className="async-error" role="alert"><span>{message}</span>{retry && <button className="secondary" onClick={retry}>Try again</button>}</div>; }

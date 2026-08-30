@@ -1,0 +1,3 @@
+import { NextRequest,NextResponse } from "next/server";
+async function proxy(request:NextRequest){const origin=request.headers.get("origin");if(origin&&origin!==request.nextUrl.origin)return NextResponse.json({error:"Invalid request origin"},{status:403});const token=request.cookies.get("typing_access")?.value;const upstream=await fetch(`${process.env.API_URL||"http://localhost:5000"}/friends`,{method:request.method,headers:{"content-type":"application/json",...(token?{authorization:`Bearer ${token}`}:{})},body:request.method==="GET"?undefined:await request.text(),cache:"no-store"});return new NextResponse(await upstream.text(),{status:upstream.status,headers:{"content-type":"application/json"}})}
+export const GET=proxy;export const POST=proxy;

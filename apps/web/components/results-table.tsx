@@ -1,0 +1,4 @@
+"use client";
+import { useResults } from "../hooks/use-api";
+import { ErrorState, LoadingState } from "./async-state";
+export function ResultsTable({ kind }: { kind: "leaderboard" | "history" }) { const query = useResults(kind); if (query.isLoading) return <LoadingState label="Loading results..."/>; if (query.isError) return <ErrorState error={query.error} retry={() => void query.refetch()}/>; const entries = query.data?.entries || []; if (!entries.length) return <p className="empty-state">No validated results yet.</p>; return <div className="results-table">{entries.map((entry, index) => <div className="result-row" key={`${entry.createdAt}-${index}`}><span>{entry.rank || index + 1}</span><strong>{entry.displayName || new Date(entry.createdAt).toLocaleDateString()}</strong><span>{entry.correctWpm} wpm</span><span>{entry.accuracy}%</span></div>)}</div>; }

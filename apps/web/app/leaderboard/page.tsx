@@ -1,0 +1,3 @@
+import type { Metadata } from "next";import Link from "next/link";import { ResultsTable } from "../../components/results-table";import { Brand } from "../../components/brand";
+export const metadata:Metadata={title:"Typing Speed Leaderboard",description:"Compare server-validated Typeflow typing and multiplayer race results.",alternates:{canonical:"/leaderboard"}};
+export default function Leaderboard(){return <main><header><Brand/><nav><Link href="/history">History</Link></nav></header><section className="data-page"><h1>Typing speed leaderboard</h1><p>All-time validated results from authenticated racers.</p><ResultsTable kind="leaderboard"/></section></main>}

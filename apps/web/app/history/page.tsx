@@ -1,0 +1,2 @@
+import Link from "next/link";import { ResultsTable } from "../../components/results-table";import { Brand } from "../../components/brand";
+export default function History(){return <main><header><Brand/><nav><Link href="/leaderboard">Leaderboard</Link></nav></header><section className="data-page"><h1>History</h1><p>Your latest server-validated races.</p><ResultsTable kind="history"/></section></main>}
