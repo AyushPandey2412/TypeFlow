@@ -1,0 +1,3 @@
+import { ImageResponse } from "next/og";
+export const alt = "Typeflow typing speed test"; export const size = { width: 1200, height: 630 }; export const contentType = "image/png";
+export default function Image(){return new ImageResponse(<div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",padding:"88px",background:"#090a0c",color:"#f4f4f5",fontFamily:"Arial"}}><div style={{color:"#36d399",fontSize:34,letterSpacing:0}}>TYPEFLOW</div><div style={{fontSize:72,fontWeight:700,marginTop:24,maxWidth:950,letterSpacing:0}}>Typing speed tests and live races</div><div style={{fontSize:30,color:"#9a9da5",marginTop:28}}>WPM, accuracy, focused practice, and multiplayer.</div></div>,size)}
