@@ -1,0 +1,1 @@
+.keyboard-row:nth-child(4){grid-template-columns:1.4fr repeat(10,1fr) 1.4fr;padding-left:0}.keyboard-key[data-key-type=shift]{aspect-ratio:auto;font-size:9px;text-transform:none}.keyboard-key[data-key-type=shift] small{bottom:3px}@media(max-width:560px){.keyboard-key[data-key-type=shift]{font-size:7px}.keyboard-row:nth-child(4){grid-template-columns:1.25fr repeat(10,1fr) 1.25fr}}

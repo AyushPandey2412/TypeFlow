@@ -1,0 +1,78 @@
+.lesson-theory {
+  max-width: 680px;
+  margin: 38px auto 0;
+  border-top: 1px solid var(--line);
+  padding-top: 34px;
+}
+
+.lesson-theory > span {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.lesson-theory h2 {
+  margin: 8px 0 16px;
+  font-size: 28px;
+}
+
+.lesson-theory > p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.theory-goal {
+  margin-top: 26px;
+  border-left: 3px solid var(--accent);
+  padding: 18px 20px;
+  background: var(--panel);
+}
+
+.theory-goal strong {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.theory-goal p {
+  margin: 7px 0 0;
+  line-height: 1.6;
+}
+
+.lesson-theory .start-lesson {
+  width: max-content;
+}
+
+.text-action {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 12px auto 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.text-action:hover {
+  color: var(--text);
+}
+
+/* Letter case is supplied by the lesson so Shift practice can change the legends. */
+.keyboard-key {
+  text-transform: none;
+}
+
+@media (max-width: 560px) {
+  .lesson-theory {
+    margin-top: 28px;
+  }
+
+  .lesson-theory h2 {
+    font-size: 24px;
+  }
+}
