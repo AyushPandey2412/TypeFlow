@@ -2,6 +2,9 @@
   "name": "@typing/web",
   "private": true,
   "version": "0.0.0",
+  "allowScripts": {
+    "argon2@0.45.1": true
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
