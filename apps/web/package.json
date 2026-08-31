@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "allowScripts": {
-    "argon2@0.45.1": true
+    "argon2": true
   },
   "scripts": {
     "dev": "next dev",
