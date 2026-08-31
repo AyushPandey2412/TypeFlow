@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "../../../../../server/src/services/auth.service.js";
+import { apiError, authIdentity, connectDatabase } from "../../../../lib/server-backend";
+
 export async function GET(request: NextRequest) {
-  const token = request.cookies.get("typing_access")?.value;
-  if (!token) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
-  const upstream = await fetch(`${process.env.API_URL || "http://localhost:5000"}/auth/me`, { headers: { authorization: `Bearer ${token}` }, cache: "no-store" });
-  return new NextResponse(await upstream.text(), { status: upstream.status, headers: { "content-type": "application/json" } });
+  try { await connectDatabase(); return NextResponse.json({ user: await getCurrentUser(authIdentity(request)) }); }
+  catch (error) { return apiError(error); }
 }

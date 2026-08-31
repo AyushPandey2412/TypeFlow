@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { config as loadEnv } from "dotenv";
+
+if (!process.env.MONGO_URI) loadEnv({ path: new URL("../.env", import.meta.url) });
 
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

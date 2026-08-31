@@ -1,3 +1,7 @@
-import { NextRequest,NextResponse } from "next/server";
-async function proxy(request:NextRequest){const origin=request.headers.get("origin");if(origin&&origin!==request.nextUrl.origin)return NextResponse.json({error:"Invalid request origin"},{status:403});const token=request.cookies.get("typing_access")?.value;const upstream=await fetch(`${process.env.API_URL||"http://localhost:5000"}/friends`,{method:request.method,headers:{"content-type":"application/json",...(token?{authorization:`Bearer ${token}`}:{})},body:request.method==="GET"?undefined:await request.text(),cache:"no-store"});return new NextResponse(await upstream.text(),{status:upstream.status,headers:{"content-type":"application/json"}})}
-export const GET=proxy;export const POST=proxy;
+import { NextRequest, NextResponse } from "next/server";
+import { addFriend, listFriends } from "../../../../server/src/services/friend.service.js";
+import { friendCodeSchema } from "../../../../server/src/validators/friend.validator.js";
+import { apiError, connectDatabase, registeredUserId, requireSameOrigin } from "../../../lib/server-backend";
+
+export async function GET(request: NextRequest) { try { await connectDatabase(); return NextResponse.json(await listFriends(registeredUserId(request))); } catch (error) { return apiError(error); } }
+export async function POST(request: NextRequest) { try { requireSameOrigin(request); await connectDatabase(); const input = friendCodeSchema.parse(await request.json()); return NextResponse.json(await addFriend(registeredUserId(request), input.code), { status: 201 }); } catch (error) { return apiError(error); } }

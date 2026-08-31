@@ -17,8 +17,10 @@
   "include": [
     "app/**/*.ts",
     "app/**/*.tsx",
+    "api/**/*.ts",
     "components/**/*.tsx",
     "hooks/**/*.ts",
+    "lib/**/*.ts",
     "next-env.d.ts",
     "stores/**/*.ts",
     ".next/types/**/*.ts"

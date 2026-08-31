@@ -1,23 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as auth from "../../../../../server/src/services/auth.service.js";
+import { credentialsSchema, registrationSchema } from "../../../../../server/src/validators/auth.validator.js";
+import { apiError, connectDatabase, requestMeta, requireSameOrigin, secureCookie } from "../../../../lib/server-backend";
 
+const refreshCookie = "typing_refresh";
 const allowed = new Set(["register", "login", "refresh", "logout", "guest"]);
 
 export async function POST(request: NextRequest, context: { params: Promise<{ action: string }> }) {
-  const origin = request.headers.get("origin");
-  if (origin && origin !== request.nextUrl.origin) return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
-  const { action } = await context.params;
-  if (!allowed.has(action)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  let upstream: Response;
-  try { upstream = await fetch(`${process.env.API_URL || "http://localhost:5000"}/auth/${action}`, {
-    method: "POST", headers: { "content-type": "application/json", cookie: request.headers.get("cookie") || "" }, body: action === "refresh" || action === "logout" || action === "guest" ? "{}" : await request.text(), cache: "no-store",
-  }); } catch { return NextResponse.json({ error: "Authentication server is unavailable" }, { status: 503 }); }
-  const text = upstream.status === 204 ? "" : await upstream.text();
-  let body: Record<string, unknown> = {}; try { body = text ? JSON.parse(text) : {}; } catch { body = { error: "Invalid upstream response" }; }
-  const accessToken = typeof body.accessToken === "string" ? body.accessToken : undefined; delete body.accessToken;
-  const response = upstream.status === 204 ? new NextResponse(null, { status: 204 }) : NextResponse.json(body, { status: upstream.status });
-  if (accessToken) response.cookies.set("typing_access", accessToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 15 * 60 });
-  if (action === "logout") response.cookies.delete("typing_access");
-  const setCookie = upstream.headers.get("set-cookie");
-  if (setCookie) response.headers.set("set-cookie", setCookie);
+  try {
+    requireSameOrigin(request);
+    const { action } = await context.params;
+    if (!allowed.has(action)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    await connectDatabase();
+    if (action === "logout") {
+      await auth.logout(request.cookies.get(refreshCookie)?.value);
+      const response = new NextResponse(null, { status: 204 });
+      response.cookies.delete("typing_access"); response.cookies.delete(refreshCookie);
+      return response;
+    }
+    if (action === "guest") return sessionResponse(await auth.createGuest(), 201, false);
+    const session = action === "refresh"
+      ? await auth.refresh(request.cookies.get(refreshCookie)?.value || "", requestMeta(request))
+      : action === "register"
+        ? await auth.register(registrationSchema.parse(await request.json()), requestMeta(request))
+        : await auth.login(credentialsSchema.parse(await request.json()), requestMeta(request));
+    return sessionResponse(session, action === "register" ? 201 : 200, true);
+  } catch (error) { return apiError(error); }
+}
+
+function sessionResponse(session: { user: unknown; accessToken: string; refreshToken?: string }, status: number, persistent: boolean) {
+  const response = NextResponse.json({ user: session.user }, { status });
+  response.cookies.set("typing_access", session.accessToken, { httpOnly: true, secure: secureCookie, sameSite: "lax", path: "/", maxAge: 15 * 60 });
+  if (persistent && session.refreshToken) response.cookies.set(refreshCookie, session.refreshToken, { httpOnly: true, secure: secureCookie, sameSite: "lax", path: "/", maxAge: auth.refreshMaxAge / 1000 });
   return response;
 }
