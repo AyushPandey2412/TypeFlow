@@ -33,6 +33,9 @@ Redis contains short-lived matchmaking, room, presence, and pub/sub state. Mongo
 
 ## 5. Environment variables
 
+Do not define `NODE_ENV` manually. Vercel sets production mode during deployment;
+setting it during installation can cause npm to omit required build tooling.
+
 Add these to Production and Preview:
 
 ```text
