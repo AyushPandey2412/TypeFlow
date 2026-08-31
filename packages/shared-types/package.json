@@ -11,7 +11,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
-  "devDependencies": {
+  "dependencies": {
     "typescript": "^5.9.2"
   }
 }
