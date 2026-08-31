@@ -1,6 +1,6 @@
 # Typeflow
 
-A typing-speed and multiplayer racing application built with Next.js 15, Express, Socket.IO, MongoDB/Mongoose, strict TypeScript, BFF authentication, and shared deterministic race logic.
+A typing-speed and multiplayer racing application built with Next.js 15, Vercel Functions, Socket.IO, Redis, MongoDB/Mongoose, strict TypeScript, and shared deterministic race logic.
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for the production deployment, DNS, security, and search-indexing checklist.
 
@@ -8,8 +8,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for the production deployment, DNS, securit
 
 ```text
 apps/
-  web/             Next.js App Router client and authentication BFF
-  server/          Express, MongoDB/Mongoose, and Socket.IO server
+  web/             Next.js UI, same-origin APIs, and Vercel WebSocket entrypoint
+  server/          Shared domain services plus the optional local Express runtime
 packages/
   config/          Shared TypeScript configuration
   shared-types/    Auth, race, player, WordPacket, and socket contracts
@@ -39,8 +39,8 @@ The web application runs at `http://localhost:3000`; the server defaults to `htt
 ## Architecture
 
 - MongoDB and Mongoose remain the database layer. Existing user documents and embedded test results are preserved.
-- Express remains the source of truth for authentication and application rules.
-- Next.js BFF routes proxy register, login, refresh, logout, and guest authentication.
+- Shared server services remain the source of truth for authentication and application rules.
+- Next.js route handlers call those services directly with cached MongoDB connections; there is no production localhost proxy.
 - Rotating refresh tokens use secure httpOnly cookies; short-lived access tokens authenticate race sockets.
 - Existing bcrypt hashes will be accepted during a transition and upgraded to Argon2id after a successful login.
 - Race, race-result, auth-session, and guest-session collections support matchmaking, validation, leaderboards, token rotation, and guest expiry.
@@ -59,11 +59,11 @@ The web application runs at `http://localhost:3000`; the server defaults to `htt
 ## Security and operations
 
 - Passwords use Argon2id. Legacy bcrypt hashes are upgraded after a successful login.
-- The BFF keeps access and refresh credentials in httpOnly cookies, enforces same-origin mutation requests, and never exposes tokens to browser state.
+- Same-origin APIs keep access and refresh credentials in httpOnly cookies, enforce origin checks on mutations, and never expose tokens to browser state.
 - Refresh tokens rotate in server-side session families; reuse revokes the entire family.
 - Solo and multiplayer clocks are server-owned, and submitted text is scored again before leaderboard persistence.
-- Matchmaking rooms are currently process-local. Run one server instance unless a shared Socket.IO adapter and race-state store are added.
-- Production requires HTTPS, strong 32+ character JWT secrets, a restricted MongoDB account, and exact `FRONTEND_URL`, `API_URL`, and `NEXT_PUBLIC_SOCKET_URL` values.
+- Vercel multiplayer uses Redis-backed rooms and the Socket.IO Redis adapter so Function instances share matchmaking and race events.
+- Production requires HTTPS, strong 32+ character JWT secrets, a restricted MongoDB account, Redis, and exact `FRONTEND_URL` and `NEXT_PUBLIC_SITE_URL` values.
 
 ## Verification
 

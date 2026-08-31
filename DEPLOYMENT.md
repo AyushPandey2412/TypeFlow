@@ -1,84 +1,73 @@
-# Typeflow deployment guide
+# Typeflow single-Vercel deployment
 
-This setup uses Vercel for Next.js, Render for the stateful Express/Socket.IO service, and MongoDB Atlas. An equivalent Node host is fine if it supports long-running processes and WebSockets.
+Typeflow deploys as one Vercel project. Next.js serves the UI and HTTP APIs, a Vercel WebSocket Function serves Socket.IO, MongoDB Atlas stores durable data, and Redis coordinates active multiplayer rooms across Function instances.
 
-## 1. Before launch
+## 1. Rotate secrets
 
-1. Check trademark, social-handle, and domain availability for `Typeflow` before the public launch.
-2. Update the draft legal pages with the real operator, jurisdiction, infrastructure providers, and effective date.
-3. Generate two different random JWT secrets of at least 32 characters. Never commit them.
-4. Run `npm test`, `npm run lint`, `npm run typecheck`, and `npm run build`.
+1. Rotate any database password pasted into chat, logs, screenshots, or commits.
+2. Create two different random JWT secrets of at least 32 bytes.
+3. Confirm `.env` and `.env.local` files are ignored by Git.
 
-## 2. MongoDB Atlas
+## 2. Configure Atlas
 
-1. Create an Atlas project and production cluster.
-2. Create a dedicated database user with read/write access only to the production database.
-3. Allow the backend host's outbound addresses in Network Access. Avoid `0.0.0.0/0` where stable addresses are available.
-4. Copy the `mongodb+srv://.../typeflow` connection string into the backend host as `MONGO_URI`.
+1. Keep the `typeflow` database and a restricted application database user.
+2. Add Vercel egress access in Atlas Network Access. Hobby deployments do not have a stable outbound IP; use `0.0.0.0/0` only with a strong restricted user, or use Vercel Secure Compute when static egress is required.
+3. Use the Atlas `mongodb+srv://.../typeflow` URI as `MONGO_URI`.
 
-## 3. Express and Socket.IO on Render
+## 3. Create the Vercel project
 
-Create a Web Service from the repository root:
+1. Import `AyushPandey2412/TypeFlow` in Vercel.
+2. Select `develop` for the first Preview deployment.
+3. Set **Root Directory** to `apps/web`.
+4. Enable **Include source files outside of the Root Directory** so shared packages and server services are bundled.
+5. Keep Next.js framework detection and `npm run build`.
+6. Enable Fluid Compute. The Socket.IO endpoint is `api/socket.ts` and follows Vercel Function duration limits.
+
+## 4. Add Redis
+
+1. Open the project Storage or Marketplace tab.
+2. Add an Upstash Redis integration close to the Vercel Functions and Atlas cluster.
+3. Connect it to this project and expose its connection string as `REDIS_URL`.
+
+Redis contains short-lived matchmaking, room, presence, and pub/sub state. MongoDB remains the source of truth for accounts and validated results.
+
+## 5. Environment variables
+
+Add these to Production and Preview:
 
 ```text
-Build: npm ci && npm run build --workspace @typing/server
-Start: npm run start --workspace @typing/server
-Health check: /health
-```
-
-Set the following secrets and configuration:
-
-```text
-NODE_ENV=production
-MONGO_URI=mongodb+srv://...
-JWT_ACCESS_SECRET=<unique-random-secret>
-JWT_REFRESH_SECRET=<different-random-secret>
+MONGO_URI=mongodb+srv://.../typeflow
+REDIS_URL=rediss://...
+JWT_ACCESS_SECRET=<private-random-secret>
+JWT_REFRESH_SECRET=<different-private-random-secret>
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_DAYS=30
-FRONTEND_URL=https://your-domain.example
+FRONTEND_URL=https://your-project.vercel.app
+NEXT_PUBLIC_SITE_URL=https://your-project.vercel.app
 ```
 
-Use the host-provided `PORT`. Confirm `/health` and a WebSocket connection to `/race` both work.
+Do not set `API_URL` or `NEXT_PUBLIC_SOCKET_URL` in Vercel. Production APIs and WebSockets use the same origin. Never upload local `.env` files.
 
-The current matchmaking and active-race state are process-local. Keep one backend instance. Before horizontal scaling, add a Socket.IO Redis adapter and shared race-state store; sticky sessions alone do not preserve in-memory matchmaking state.
+After attaching a custom domain, update `FRONTEND_URL` and `NEXT_PUBLIC_SITE_URL` to the canonical HTTPS origin and redeploy.
 
-## 4. Next.js on Vercel
+## 6. Deploy and verify
 
-Import the same repository with these settings:
+Deploy `develop` as a Preview and test:
+
+1. Register, login, refresh after reload, and logout.
+2. Solo completion, history, and leaderboard persistence.
+3. Friend codes, friendships, invitations, and statistics.
+4. Three browser sessions joining a public race.
+5. Ten-second auto-start, progress, validation, and reconnect behavior.
+6. SEO endpoints, legal pages, and responsive layouts.
+
+Before promotion run:
 
 ```text
-Framework: Next.js
-Root directory: apps/web
-Include source files outside root directory: enabled
-Install: npm install
-Build: npm run build
+npm test
+npm run lint
+npm run typecheck
+npm run build
 ```
 
-Set these for Production and the appropriate Preview environments:
-
-```text
-API_URL=https://api.your-domain.example
-NEXT_PUBLIC_SOCKET_URL=https://api.your-domain.example
-NEXT_PUBLIC_SITE_URL=https://your-domain.example
-```
-
-`API_URL` is used by the server-side BFF. `NEXT_PUBLIC_*` values are visible to browsers and must never contain secrets. Redeploy after changing them.
-
-## 5. Domain and security
-
-1. Point the primary domain to Vercel and an `api` subdomain to Render using their supplied DNS records.
-2. Wait for HTTPS certificates on both origins.
-3. Set `FRONTEND_URL` to the exact frontend origin, then redeploy the backend.
-4. Test register, refresh after reload, logout, saved solo results, leaderboard, matchmaking, and private friend races.
-5. Enable provider logs and alerts. Back up MongoDB and restrict production access.
-
-## 6. Search launch checklist
-
-1. Verify `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, the favicon, and the social preview image in production.
-2. Add a Google Search Console domain property with DNS verification.
-3. Submit `/sitemap.xml`; request indexing for the home page, WPM guide, About page, and leaderboard.
-4. Run Lighthouse on mobile and desktop and fix Core Web Vitals, contrast, broken links, and layout shifts.
-5. Publish genuinely useful typing guidance and product improvements over time. Earn relevant links through communities, schools, documentation, and open-source work. Do not buy links or create keyword-stuffed doorway pages.
-6. Monitor indexed pages, queries, crawl errors, uptime, database limits, and WebSocket failures.
-
-Technical SEO makes a site crawlable and understandable; it cannot guarantee a top-10 result. Rankings also depend on search intent, competition, content quality, reputation, links, performance, geography, and time.
+When Preview checks pass, merge `develop` into `main` and promote the production deployment.
