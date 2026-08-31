@@ -1,3 +1,4 @@
-import { Schema,model,models } from "mongoose";
+import mongoose from "mongoose";
+const { Schema, model, models } = mongoose;
 const schema=new Schema({raceId:{type:Schema.Types.ObjectId,ref:"Race",required:true,index:true},userId:{type:Schema.Types.ObjectId,ref:"User",index:true},guestSessionId:{type:String,index:true},rawWpm:{type:Number,required:true},correctWpm:{type:Number,required:true,index:true},accuracy:{type:Number,required:true},errors:{type:Number,required:true},durationMs:{type:Number,required:true},valid:{type:Boolean,required:true,index:true}},{timestamps:true}); schema.index({userId:1,raceId:1},{unique:true,sparse:true}); schema.index({valid:1,correctWpm:-1,createdAt:-1});
 export const RaceResult=models.RaceResult||model("RaceResult",schema);
