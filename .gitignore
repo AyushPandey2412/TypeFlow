@@ -13,3 +13,6 @@ node_modules/
 *.tsbuildinfo
 .DS_Store
 .design-backups/
+
+.vercel/
+.env.local
