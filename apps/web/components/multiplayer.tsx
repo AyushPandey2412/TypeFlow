@@ -1,14 +1,86 @@
 "use client";
-import type { ClientToServerEvents, Player, Race, RaceMode, RaceResult, ServerToClientEvents, WordPacket } from "@typing/shared-types";
-import { useEffect, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
 
-export function Multiplayer({ mode, wordCount, numbers, punctuation, inviteCode, onClose }: { mode: RaceMode; wordCount: 25|50|100; numbers:boolean; punctuation:boolean; inviteCode?:string; onClose:()=>void }) {
-  const [token,setToken]=useState<string|null>(null); const [race,setRace]=useState<Race|null>(null); const [players,setPlayers]=useState<Player[]>([]); const [results,setResults]=useState<RaceResult[]>([]); const [packet,setPacket]=useState<WordPacket|null>(null); const [typed,setTyped]=useState("");const [error,setError]=useState("");
-  const socket=useRef<Socket<ServerToClientEvents,ClientToServerEvents>|null>(null); const started=useRef(0);const completed=useRef(false);const raceId=useRef("");
-  useEffect(()=>{fetch("/api/socket-token").then(async response=>{if(response.ok)setToken((await response.json()).token);else setError("Your session expired. Sign in again.")}).catch(()=>setError("Unable to reach the race server."));},[]);
-  useEffect(()=>{if(!token)return;const external=process.env.NEXT_PUBLIC_SOCKET_URL;const client:Socket<ServerToClientEvents,ClientToServerEvents>=io(`${external||window.location.origin}/race`,{path:external?"/socket.io":"/api/socket",auth:{token},reconnection:true,reconnectionDelay:1000,reconnectionDelayMax:30000});socket.current=client;client.on("connect_error",()=>setError("Unable to connect to multiplayer."));client.on("race:error",value=>setError(value.message));client.on("race:state",value=>{raceId.current=value.id;setRace(value);setPlayers(value.players);if(value.status==="running"&&!started.current)started.current=Date.now()});client.on("race:packet",setPacket);client.on("race:player-progress",player=>setPlayers(values=>values.map(value=>value.id===player.id?player:value)));client.on("race:results",setResults);client.emit("race:matchmake",{mode,wordCount,numbers,punctuation,inviteCode});return()=>{client.emit("race:leave",{raceId:raceId.current});client.disconnect()}},[inviteCode,mode,numbers,punctuation,token,wordCount]);
-  const target=packet?.words.slice(0,wordCount).join(" ")||"";
-  function type(value:string){if(race?.status!=="running"||completed.current)return;const next=value.slice(0,target.length);setTyped(next);socket.current?.emit("race:progress",{raceId:race.id,typedText:next});if(next.length===target.length){completed.current=true;socket.current?.emit("race:complete",{raceId:race.id,typedText:next,durationMs:Date.now()-started.current})}}
-  return <div className="multiplayer"><div className="multiplayer-head"><div><h2>Live race</h2><p>{race?.status||"Finding players"} - starts with 3 players or after 10 seconds</p></div><button className="secondary" onClick={onClose}>Leave</button></div>{error&&<div className="form-error" role="alert">{error}</div>}<div className="player-list">{[0,1,2].map(index=>{const player=players[index];return <div className="player-row" key={index}><div className="player-label"><span>{player?.displayName||"Waiting for player"}</span><span>{player?.wpm||0} wpm</span></div><div className="progress"><i style={{width:`${player?.progress||0}%`}}/></div></div>})}</div>{target&&<div className="multiplayer-type"><div className="words">{[...target].map((char,index)=><span key={index} data-state={index<typed.length?(typed[index]===char?"correct":"wrong"):index===typed.length?"caret":"upcoming"}>{char}</span>)}</div><textarea aria-label="Multiplayer typing input" autoFocus value={typed} onPaste={event=>event.preventDefault()} onChange={event=>type(event.target.value)} disabled={race?.status!=="running"}/></div>}{results.length>0&&<p>Race complete. Validated WPM: {results[0].correctWpm}</p>}</div>;
+import type { Player, Race, RaceMode, RaceResult, WordPacket } from "@typing/shared-types";
+import { useEffect, useRef, useState } from "react";
+import { raceService, type MultiplayerState } from "../services/race.service";
+
+type Props = { mode: RaceMode; wordCount: 25 | 50 | 100; numbers: boolean; punctuation: boolean; inviteCode?: string; onClose: () => void };
+
+export function Multiplayer({ mode, wordCount, numbers, punctuation, inviteCode, onClose }: Props) {
+  const [race, setRace] = useState<Race | null>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [results, setResults] = useState<RaceResult[]>([]);
+  const [packet, setPacket] = useState<WordPacket | null>(null);
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState("");
+  const raceId = useRef("");
+  const completed = useRef(false);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function applyState(value: MultiplayerState) {
+    raceId.current = value.race.id;
+    setRace(value.race);
+    setPlayers(value.race.players);
+    setPacket(value.packet);
+    setResults(value.results);
+    setError("");
+  }
+
+  useEffect(() => {
+    let active = true;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    raceService.matchmake({ mode, wordCount, numbers, punctuation, inviteCode })
+      .then(value => {
+        if (!active) return;
+        applyState(value);
+        poll = setInterval(() => {
+          if (!raceId.current) return;
+          raceService.multiplayerState(raceId.current).then(applyState).catch(() => setError("Race connection was interrupted. Retrying..."));
+        }, 1000);
+      })
+      .catch(errorValue => setError(errorValue instanceof Error ? errorValue.message : "Unable to connect to multiplayer."));
+    return () => {
+      active = false;
+      if (poll) clearInterval(poll);
+      if (progressTimer.current) clearTimeout(progressTimer.current);
+      void raceService.leaveMultiplayer().catch(() => undefined);
+    };
+  }, [inviteCode, mode, numbers, punctuation, wordCount]);
+
+  const target = packet?.words.slice(0, wordCount).join(" ") || "";
+
+  function type(value: string) {
+    if (race?.status !== "running" || completed.current) return;
+    const next = value.slice(0, target.length);
+    setTyped(next);
+    if (progressTimer.current) clearTimeout(progressTimer.current);
+    progressTimer.current = setTimeout(() => {
+      if (raceId.current) void raceService.multiplayerProgress({ raceId: raceId.current, typedText: next }).then(applyState).catch(() => undefined);
+    }, 200);
+    if (next.length === target.length) {
+      completed.current = true;
+      const startsAt = race.startsAt ? new Date(race.startsAt).getTime() : Date.now();
+      void raceService.completeMultiplayer({ raceId: race.id, typedText: next, durationMs: Math.max(1, Date.now() - startsAt) }).then(applyState).catch(() => setError("Unable to submit the race result."));
+    }
+  }
+
+  return <div className="multiplayer">
+    <div className="multiplayer-head">
+      <div><h2>Live race</h2><p>{race?.status || "Finding players"} - starts with 3 players or after 10 seconds</p></div>
+      <button className="secondary" onClick={onClose}>Leave</button>
+    </div>
+    {error && <div className="form-error" role="alert">{error}</div>}
+    <div className="player-list">{[0, 1, 2].map(index => {
+      const player = players[index];
+      return <div className="player-row" key={index}>
+        <div className="player-label"><span>{player?.displayName || "Waiting for player"}</span><span>{player?.wpm || 0} wpm</span></div>
+        <div className="progress"><i style={{ width: `${player?.progress || 0}%` }} /></div>
+      </div>;
+    })}</div>
+    {target && <div className="multiplayer-type">
+      <div className="words">{[...target].map((char, index) => <span key={index} data-state={index < typed.length ? (typed[index] === char ? "correct" : "wrong") : index === typed.length ? "caret" : "upcoming"}>{char}</span>)}</div>
+      <textarea aria-label="Multiplayer typing input" autoFocus value={typed} onPaste={event => event.preventDefault()} onChange={event => type(event.target.value)} disabled={race?.status !== "running"} />
+    </div>}
+    {results.length > 0 && <p>Race complete. Validated WPM: {results[0].correctWpm}</p>}
+  </div>;
 }

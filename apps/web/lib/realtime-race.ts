@@ -78,3 +78,27 @@ export async function complete(redis: Redis, roomId: string, identityId: string,
 }); }
 
 export async function disconnect(redis: Redis, identityId: string) { const roomId = await redis.get(playerKey(identityId)); if (!roomId) return null; return locked(redis, roomId, async () => { const room = await load(redis, roomId); if (!room?.players[identityId]) return room; room.players[identityId].connected = false; return save(redis, room); }); }
+
+export async function getRoomState(redis: Redis, identityId: string, requestedRoomId?: string) {
+  const roomId = requestedRoomId || await redis.get(playerKey(identityId));
+  if (!roomId) return null;
+  return locked(redis, roomId, async () => {
+    const room = await load(redis, roomId);
+    if (!room || !room.players[identityId]) return null;
+    const now = Date.now();
+    if (room.status === "waiting" && (Object.keys(room.players).length >= room.maxPlayers || now >= room.createdAt + 10_000)) {
+      room.status = "countdown";
+      room.startsAt = now + 3000;
+      await races.update(room.mongoId, { status: "countdown", startsAt: new Date(room.startsAt) });
+    } else if (room.status === "countdown" && room.startsAt && now >= room.startsAt) {
+      room.status = "running";
+      await races.update(room.mongoId, { status: "running" });
+    } else if (room.status === "running" && room.startsAt && now >= room.startsAt + 130_000) {
+      room.status = "finished";
+      await races.update(room.mongoId, { status: "finished", endsAt: new Date() });
+    }
+    room.players[identityId].connected = true;
+    await save(redis, room);
+    return room;
+  });
+}
