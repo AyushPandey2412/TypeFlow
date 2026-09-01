@@ -3,6 +3,7 @@
   "globalEnv": [
     "MONGO_URI",
     "REDIS_URL",
+    "PORT",
     "JWT_ACCESS_SECRET",
     "JWT_REFRESH_SECRET",
     "ACCESS_TOKEN_TTL",
