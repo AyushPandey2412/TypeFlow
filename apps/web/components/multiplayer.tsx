@@ -3,6 +3,7 @@
 import type { Player, Race, RaceMode, RaceResult, WordPacket } from "@typing/shared-types";
 import { useEffect, useRef, useState } from "react";
 import { raceService, type MultiplayerState } from "../services/race.service";
+import { friendService } from "../services/friend.service";
 
 type Props = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string; onClose: () => void };
 
@@ -44,6 +45,7 @@ export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctua
       if (poll) clearInterval(poll);
       if (progressTimer.current) clearTimeout(progressTimer.current);
       void raceService.leaveMultiplayer().catch(() => undefined);
+      if (inviteCode) void friendService.respond(inviteCode, "cancel").catch(() => undefined);
     };
   }, [inviteCode, mode, numbers, playerCount, punctuation, wordCount]);
 
