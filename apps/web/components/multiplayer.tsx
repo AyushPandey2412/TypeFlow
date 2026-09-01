@@ -4,9 +4,9 @@ import type { Player, Race, RaceMode, RaceResult, WordPacket } from "@typing/sha
 import { useEffect, useRef, useState } from "react";
 import { raceService, type MultiplayerState } from "../services/race.service";
 
-type Props = { mode: RaceMode; wordCount: 25 | 50 | 100; numbers: boolean; punctuation: boolean; inviteCode?: string; onClose: () => void };
+type Props = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string; onClose: () => void };
 
-export function Multiplayer({ mode, wordCount, numbers, punctuation, inviteCode, onClose }: Props) {
+export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctuation, inviteCode, onClose }: Props) {
   const [race, setRace] = useState<Race | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [results, setResults] = useState<RaceResult[]>([]);
@@ -29,7 +29,7 @@ export function Multiplayer({ mode, wordCount, numbers, punctuation, inviteCode,
   useEffect(() => {
     let active = true;
     let poll: ReturnType<typeof setInterval> | undefined;
-    raceService.matchmake({ mode, wordCount, numbers, punctuation, inviteCode })
+    raceService.matchmake({ mode, wordCount, playerCount, numbers, punctuation, inviteCode })
       .then(value => {
         if (!active) return;
         applyState(value);
@@ -45,7 +45,7 @@ export function Multiplayer({ mode, wordCount, numbers, punctuation, inviteCode,
       if (progressTimer.current) clearTimeout(progressTimer.current);
       void raceService.leaveMultiplayer().catch(() => undefined);
     };
-  }, [inviteCode, mode, numbers, punctuation, wordCount]);
+  }, [inviteCode, mode, numbers, playerCount, punctuation, wordCount]);
 
   const target = packet?.words.slice(0, wordCount).join(" ") || "";
 
@@ -66,11 +66,11 @@ export function Multiplayer({ mode, wordCount, numbers, punctuation, inviteCode,
 
   return <div className="multiplayer">
     <div className="multiplayer-head">
-      <div><h2>Live race</h2><p>{race?.status || "Finding players"} - starts with 3 players or after 10 seconds</p></div>
+      <div><h2>Live race</h2><p>{race?.status || "Finding players"} - starts with {playerCount} players or after 10 seconds</p></div>
       <button className="secondary" onClick={onClose}>Leave</button>
     </div>
     {error && <div className="form-error" role="alert">{error}</div>}
-    <div className="player-list">{[0, 1, 2].map(index => {
+    <div className="player-list">{Array.from({ length: playerCount }, (_, index) => {
       const player = players[index];
       return <div className="player-row" key={index}>
         <div className="player-label"><span>{player?.displayName || "Waiting for player"}</span><span>{player?.wpm || 0} wpm</span></div>

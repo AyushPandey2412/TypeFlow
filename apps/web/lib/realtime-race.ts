@@ -8,11 +8,11 @@ import { calculateScore } from "../../server/src/services/scoring.service.js";
 export type Identity = { id: string; displayName: string; role: "user" | "guest" };
 type StoredPlayer = Player & { identity: Identity; socketId: string };
 export type StoredRoom = { id: string; mongoId: string; status: "waiting" | "countdown" | "running" | "finished"; players: Record<string, StoredPlayer>; packet: WordPacket; wordCount: 25 | 50 | 100; maxPlayers: number; inviteCode?: string; results: RaceResult[]; completedPlayerIds: string[]; createdAt: number; startsAt?: number };
-type Options = { mode: RaceMode; wordCount: 25 | 50 | 100; numbers: boolean; punctuation: boolean; inviteCode?: string };
+type Options = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string };
 
 const roomKey = (id: string) => `typeflow:room:${id}`;
 const playerKey = (id: string) => `typeflow:player-room:${id}`;
-const queueKey = (options: Options) => `typeflow:queue:${options.inviteCode || "public"}:${options.mode}:${options.wordCount}:${Number(options.numbers)}:${Number(options.punctuation)}`;
+const queueKey = (options: Options) => `typeflow:queue:${options.inviteCode || "public"}:${options.mode}:${options.wordCount}:${options.playerCount || 3}:${Number(options.numbers)}:${Number(options.punctuation)}`;
 const publicPlayer = (player: StoredPlayer): Player => ({ id: player.id, displayName: player.displayName, role: player.role, progress: player.progress, wpm: player.wpm, connected: player.connected });
 
 async function load(redis: Redis, id: string) { const value = await redis.get(roomKey(id)); return value ? JSON.parse(value) as StoredRoom : null; }
@@ -48,7 +48,7 @@ export async function matchmake(redis: Redis, socketId: string, identity: Identi
       const words = generateWords({ seed, count: Math.max(options.wordCount, 100), list: options.mode === "hard" ? "hard" : "common", numbers: options.numbers, punctuation: options.punctuation });
       const packet: WordPacket = { id: randomUUID(), seed, words, mode: options.mode, includeNumbers: options.numbers, includePunctuation: options.punctuation, issuedAt: new Date().toISOString() };
       const race = await races.create({ kind: "multiplayer", status: "waiting", wordPacket: { packetId: packet.id, ...packet }, participantIds: [identity.id] });
-      room = { id: randomUUID(), mongoId: String(race._id), status: "waiting", players: {}, packet, wordCount: options.wordCount, maxPlayers: options.inviteCode ? 2 : 3, inviteCode: options.inviteCode, results: [], completedPlayerIds: [], createdAt: Date.now() };
+      room = { id: randomUUID(), mongoId: String(race._id), status: "waiting", players: {}, packet, wordCount: options.wordCount, maxPlayers: options.playerCount || (options.inviteCode ? 2 : 3), inviteCode: options.inviteCode, results: [], completedPlayerIds: [], createdAt: Date.now() };
       await redis.set(queueKey(options), room.id, "EX", 30);
     }
     room.players[identity.id] = { id: identity.id, displayName: identity.displayName, role: identity.role, progress: 0, wpm: 0, connected: true, identity, socketId };
