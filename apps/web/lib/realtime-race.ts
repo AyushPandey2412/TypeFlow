@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type { Player, RaceMode, RaceResult, WordPacket } from "@typing/shared-types";
 import { generateWords } from "@typing/word-lists";
 import type Redis from "ioredis";
@@ -12,6 +13,7 @@ type Options = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; 
 
 const roomKey = (id: string) => `typeflow:room:${id}`;
 const playerKey = (id: string) => `typeflow:player-room:${id}`;
+const privateRoomKey = (code: string) => `typeflow:private-room:${code}`;
 const queueKey = (options: Options) => `typeflow:queue:${options.inviteCode || "public"}:${options.mode}:${options.wordCount}:${options.playerCount || 3}:${Number(options.numbers)}:${Number(options.punctuation)}`;
 const publicPlayer = (player: StoredPlayer): Player => ({ id: player.id, displayName: player.displayName, role: player.role, progress: player.progress, wpm: player.wpm, connected: player.connected });
 
@@ -101,4 +103,23 @@ export async function getRoomState(redis: Redis, identityId: string, requestedRo
     await save(redis, room);
     return room;
   });
+}
+
+export async function createPrivateRoom(redis: Redis, identity: Identity, options: Omit<Options, "inviteCode">) {
+  let code = "";
+  for (let attempt = 0; attempt < 8; attempt++) {
+    code = randomBytes(3).toString("hex").toUpperCase();
+    if (await redis.set(privateRoomKey(code), JSON.stringify(options), "EX", 900, "NX")) break;
+  }
+  if (!code) throw new Error("Unable to create room code");
+  const room = await matchmake(redis, identity.id, identity, { ...options, inviteCode: code });
+  return { room, code };
+}
+
+export async function joinPrivateRoom(redis: Redis, identity: Identity, code: string) {
+  const normalized = code.trim().toUpperCase();
+  const value = await redis.get(privateRoomKey(normalized));
+  if (!value) return null;
+  const options = JSON.parse(value) as Omit<Options, "inviteCode">;
+  return matchmake(redis, identity.id, identity, { ...options, inviteCode: normalized });
 }

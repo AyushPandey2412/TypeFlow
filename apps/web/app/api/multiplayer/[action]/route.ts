@@ -4,6 +4,7 @@ import { validateRaceInvite } from "../../../../../server/src/services/friend.se
 import { getRedis } from "../../../../lib/redis";
 import * as raceState from "../../../../lib/realtime-race";
 import { apiError, authIdentity, connectDatabase, requireSameOrigin } from "../../../../lib/server-backend";
+import { z } from "zod";
 
 type Context = { params: Promise<{ action: string }> };
 
@@ -28,6 +29,16 @@ export async function POST(request: NextRequest, context: Context) {
     const { action } = await context.params;
     const identity = authIdentity(request);
     const redis = getRedis();
+    if (action === "create-room") {
+      const parsed = matchmakingSchema.omit({ inviteCode: true }).parse(await request.json());
+      const created = await raceState.createPrivateRoom(redis, identity, parsed);
+      return NextResponse.json({ race: raceState.publicRace(created.room), packet: created.room.packet, results: created.room.results, roomCode: created.code });
+    }
+    if (action === "join-room") {
+      const { roomCode } = z.object({ roomCode: z.string().trim().length(6).transform(value => value.toUpperCase()) }).parse(await request.json());
+      const room = await raceState.joinPrivateRoom(redis, identity, roomCode);
+      return room ? response(room) : NextResponse.json({ error: "Room code is invalid or expired" }, { status: 404 });
+    }
     if (action === "matchmake") {
       const parsed = matchmakingSchema.parse(await request.json());
       const invite = parsed.inviteCode ? await validateRaceInvite(parsed.inviteCode, identity.id) : null;

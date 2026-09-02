@@ -5,15 +5,16 @@ import { useEffect, useRef, useState } from "react";
 import { raceService, type MultiplayerState } from "../services/race.service";
 import { friendService } from "../services/friend.service";
 
-type Props = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string; onClose: () => void };
+type Props = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string; roomMode?: "create" | "join"; roomCode?: string; onClose: () => void };
 
-export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctuation, inviteCode, onClose }: Props) {
+export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctuation, inviteCode, roomMode, roomCode: requestedRoomCode, onClose }: Props) {
   const [race, setRace] = useState<Race | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [results, setResults] = useState<RaceResult[]>([]);
   const [packet, setPacket] = useState<WordPacket | null>(null);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState("");
+  const [roomCode, setRoomCode] = useState(requestedRoomCode || "");
   const raceId = useRef("");
   const completed = useRef(false);
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -30,9 +31,11 @@ export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctua
   useEffect(() => {
     let active = true;
     let poll: ReturnType<typeof setInterval> | undefined;
-    raceService.matchmake({ mode, wordCount, playerCount, numbers, punctuation, inviteCode })
+    const request = roomMode === "create" ? raceService.createPrivateRoom({ mode, wordCount, playerCount, numbers, punctuation }) : roomMode === "join" ? raceService.joinPrivateRoom(requestedRoomCode || "") : raceService.matchmake({ mode, wordCount, playerCount, numbers, punctuation, inviteCode });
+    request
       .then(value => {
         if (!active) return;
+        if ("roomCode" in value && typeof value.roomCode === "string") setRoomCode(value.roomCode);
         applyState(value);
         poll = setInterval(() => {
           if (!raceId.current) return;
@@ -47,7 +50,7 @@ export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctua
       void raceService.leaveMultiplayer().catch(() => undefined);
       if (inviteCode) void friendService.respond(inviteCode, "cancel").catch(() => undefined);
     };
-  }, [inviteCode, mode, numbers, playerCount, punctuation, wordCount]);
+  }, [inviteCode, mode, numbers, playerCount, punctuation, requestedRoomCode, roomMode, wordCount]);
 
   const target = packet?.words.slice(0, wordCount).join(" ") || "";
 
@@ -68,7 +71,7 @@ export function Multiplayer({ mode, wordCount, playerCount = 3, numbers, punctua
 
   return <div className="multiplayer">
     <div className="multiplayer-head">
-      <div><h2>Live race</h2><p>{race?.status || "Finding players"} - starts with {playerCount} players or after 10 seconds</p></div>
+      <div><h2>Live race</h2><p>{race?.status || "Finding players"} - starts with {playerCount} players or after 10 seconds</p>{roomCode&&<button className="room-code" title="Copy room code" onClick={()=>void navigator.clipboard.writeText(roomCode)}>Room code <strong>{roomCode}</strong> · copy</button>}</div>
       <button className="secondary" onClick={onClose}>Leave</button>
     </div>
     {error && <div className="form-error" role="alert">{error}</div>}

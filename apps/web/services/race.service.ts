@@ -11,6 +11,8 @@ export const raceService = {
   extendSolo: (raceId: string) => postJson<{ words: string[] }>(`/api/races/${raceId}/extend`),
   completeSolo: (raceId: string, body: { typedText: string; durationMs: number }) => postJson(`/api/races/${raceId}/complete`, body),
   matchmake: (body: { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string }) => postJson<MultiplayerState>("/api/multiplayer/matchmake", body),
+  createPrivateRoom: (body: { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount: 2 | 3; numbers: boolean; punctuation: boolean }) => postJson<MultiplayerState & { roomCode: string }>("/api/multiplayer/create-room", body),
+  joinPrivateRoom: (roomCode: string) => postJson<MultiplayerState>("/api/multiplayer/join-room", { roomCode }),
   multiplayerState: (raceId: string) => apiRequest<MultiplayerState>(`/api/multiplayer/state?raceId=${encodeURIComponent(raceId)}`),
   multiplayerProgress: (body: { raceId: string; typedText: string }) => postJson<MultiplayerState>("/api/multiplayer/progress", body),
   completeMultiplayer: (body: { raceId: string; typedText: string; durationMs: number }) => postJson<MultiplayerState>("/api/multiplayer/complete", body),

@@ -33,7 +33,7 @@ export function registeredUserId(request: NextRequest) { const identity = authId
 export function apiError(error: unknown) {
   if (error instanceof HttpError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof ZodError) return NextResponse.json({ error: error.issues[0]?.message || "Invalid request" }, { status: 400 });
-  console.error("API request failed", error); return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  console.error("API request failed", error); if(error instanceof Error&&error.message.includes("REDIS_URL"))return NextResponse.json({error:"Multiplayer storage is not configured yet"},{status:503});return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }
 
 export const secureCookie = process.env.NODE_ENV === "production";

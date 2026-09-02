@@ -1,13 +1,9 @@
 "use client";
+import { FormEvent, useState } from "react";
 import { Users, X } from "lucide-react";
-
-export function RaceSetup({ playerCount, setPlayerCount, onStart, onClose }: { playerCount: 2 | 3; setPlayerCount: (value: 2 | 3) => void; onStart: () => void; onClose: () => void }) {
-  return <div className="backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="dialog race-setup" role="dialog" aria-modal="true" aria-labelledby="race-setup-title">
-      <button className="close" title="Close" onClick={onClose}><X size={18}/></button>
-      <Users size={20}/><h2 id="race-setup-title">Start a live race</h2><p>Choose the lobby size. The race also starts automatically after ten seconds.</p>
-      <span className="field-label">Players</span><div className="segments">{([2, 3] as const).map(value => <button key={value} data-active={playerCount === value} onClick={() => setPlayerCount(value)}>{value} players</button>)}</div>
-      <button className="primary" onClick={onStart}>Find players</button>
-    </section>
-  </div>;
+type RaceChoice = { roomMode?: "create" | "join"; roomCode?: string };
+export function RaceSetup({ playerCount, setPlayerCount, onStart, onClose }: { playerCount: 2 | 3; setPlayerCount: (value: 2 | 3) => void; onStart: (choice: RaceChoice) => void; onClose: () => void }) {
+  const [kind, setKind] = useState<"public" | "create" | "join">("public");
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const roomCode=String(new FormData(event.currentTarget).get("roomCode")||"").trim().toUpperCase();onStart(kind==="public"?{}:kind==="create"?{roomMode:"create"}:{roomMode:"join",roomCode}); }
+  return <div className="backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}><form className="dialog race-setup" role="dialog" aria-modal="true" aria-labelledby="race-setup-title" onSubmit={submit}><button type="button" className="close" title="Close" onClick={onClose}><X size={18}/></button><Users size={20}/><h2 id="race-setup-title">Multiplayer race</h2><p>Find players or share a private room code.</p><div className="segments race-kind">{(["public","create","join"] as const).map(value=><button type="button" key={value} data-active={kind===value} onClick={()=>setKind(value)}>{value==="public"?"Quick match":value==="create"?"Create room":"Join room"}</button>)}</div>{kind!=="join"&&<><span className="field-label">Players</span><div className="segments">{([2,3] as const).map(value=><button type="button" key={value} data-active={playerCount===value} onClick={()=>setPlayerCount(value)}>{value} players</button>)}</div></>}{kind==="join"&&<><label className="field-label" htmlFor="room-code">Room code</label><input id="room-code" name="roomCode" placeholder="ABC123" minLength={6} maxLength={6} autoCapitalize="characters" required/></>}<button className="primary">{kind==="public"?"Find players":kind==="create"?"Create private room":"Join private room"}</button></form></div>;
 }

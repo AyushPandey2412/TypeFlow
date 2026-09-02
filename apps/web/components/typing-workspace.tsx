@@ -30,7 +30,7 @@ export function TypingWorkspace() {
   const resultsSection=useRef<HTMLDivElement>(null);
   const settingsRef=useRef<HTMLDivElement>(null);
   const [runSeed,setRunSeed]=useState("initial");const [runNumber,setRunNumber]=useState(0);
-  const [wordCount,setWordCount]=useState<25|50|100>(50); const [numbers,setNumbers]=useState(false); const [punctuation,setPunctuation]=useState(false); const [authOpen,setAuthOpen]=useState(false); const [raceSetupOpen,setRaceSetupOpen]=useState(false);const [playerCount,setPlayerCount]=useState<2|3>(3);const [activeRace,setActiveRace]=useState<(RaceOptions&{inviteCode?:string})|null>(null); const [settingsOpen,setSettingsOpen]=useState(false);
+  const [wordCount,setWordCount]=useState<25|50|100>(50); const [numbers,setNumbers]=useState(false); const [punctuation,setPunctuation]=useState(false); const [authOpen,setAuthOpen]=useState(false); const [raceSetupOpen,setRaceSetupOpen]=useState(false);const [playerCount,setPlayerCount]=useState<2|3>(3);const [activeRace,setActiveRace]=useState<(RaceOptions&{inviteCode?:string;roomMode?:"create"|"join";roomCode?:string})|null>(null); const [settingsOpen,setSettingsOpen]=useState(false);
   const [layout,setLayout]=useState<"monkey"|"lines">("monkey");
   const user=useAuth(s=>s.user); const setUser=useAuth(s=>s.setUser); const setHydrated=useAuth(s=>s.setHydrated); const clear=useAuth(s=>s.clear);
   const configKey=`${testKind}-${mode}-${wordCount}-${numbers}-${punctuation}`;
@@ -68,6 +68,6 @@ export function TypingWorkspace() {
       {engine.finished&&<div ref={resultsSection} className="results"><div className="result-overview"><div className="result-hero"><span>wpm</span><b>{engine.wpm}</b><small>{engine.rawWpm} raw</small></div><div className="result-metrics"><div><b>{engine.accuracy}%</b><span>accuracy</span></div><div><b>{engine.consistency}%</b><span>consistency</span></div><div><b>{Math.max(1,Math.round(engine.elapsedMs/1000))}s</b><span>test time</span></div></div></div><div className="character-breakdown" aria-label="Character breakdown"><div data-kind="correct"><span>Correct</span><b>{engine.characterStats.correct}</b></div><div data-kind="incorrect"><span>Incorrect</span><b>{engine.characterStats.incorrect}</b></div><div data-kind="extra"><span>Extra</span><b>{engine.characterStats.extra}</b></div><div data-kind="missed"><span>Missed</span><b>{engine.characterStats.missed}</b></div></div><ResultChart data={engine.history}/></div>}
     </section>
     <AuthDialog open={authOpen} onClose={()=>setAuthOpen(false)}/>
-    {raceSetupOpen&&<RaceSetup playerCount={playerCount} setPlayerCount={setPlayerCount} onClose={()=>setRaceSetupOpen(false)} onStart={()=>{setRaceSetupOpen(false);setActiveRace({mode,wordCount,playerCount,numbers,punctuation})}}/>}
+    {raceSetupOpen&&<RaceSetup playerCount={playerCount} setPlayerCount={setPlayerCount} onClose={()=>setRaceSetupOpen(false)} onStart={choice=>{setRaceSetupOpen(false);setActiveRace({mode,wordCount,playerCount,numbers,punctuation,...choice})}}/>}
   </main>;
 }
