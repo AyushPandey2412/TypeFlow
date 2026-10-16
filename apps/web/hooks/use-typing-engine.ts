@@ -11,7 +11,8 @@ export function useTypingEngine(words: string[], seconds = 30, strict = false, k
   const lockedLength = useRef(0);
   const lastSample = useRef(0);
   const lastSampleLength = useRef(0);
-  const elapsedMs = startedAt ? Math.max(0, now - startedAt) : 0;
+  const measuredElapsed = startedAt !== null ? Math.max(0, now - startedAt) : 0;
+  const elapsedMs = kind === "time" ? Math.min(seconds * 1000, measuredElapsed) : measuredElapsed;
   const elapsedSecond = Math.floor(elapsedMs / 1000);
   const remaining = kind === "time" ? Math.max(0, seconds - elapsedSecond) : elapsedSecond;
   const score = calculateTypingScore({ target, typedText: typed, durationMs: elapsedMs });
@@ -29,21 +30,31 @@ export function useTypingEngine(words: string[], seconds = 30, strict = false, k
     return () => window.clearInterval(timer);
   }, [running]);
   useEffect(() => {
-    if (!startedAt || elapsedSecond < 1 || elapsedSecond === lastSample.current) return;
+    if (startedAt === null || elapsedSecond < 1 || elapsedSecond === lastSample.current) return;
+    const sampleSeconds = elapsedSecond - lastSample.current;
     lastSample.current = elapsedSecond;
-    const raw = Math.max(0, Math.round((typed.length-lastSampleLength.current)/5*60));
+    const raw = Math.max(0, Math.round((typed.length-lastSampleLength.current)/5*60/sampleSeconds));
     lastSampleLength.current=typed.length;
     setHistory(value => [...value, { second: elapsedSecond, wpm, raw, errors }]);
   }, [elapsedSecond, errors, startedAt, typed.length, wpm]);
 
   const input = useCallback((value: string) => {
     if (finished) return;
-    if (!startedAt) { const time = Date.now(); setStartedAt(time); setNow(time); }
     if (strict && value.length < lockedLength.current) return;
+    const time = Date.now();
+    if (startedAt !== null && kind === "time" && time - startedAt >= seconds * 1000) {
+      setNow(time);
+      return;
+    }
+    if (startedAt === null) {
+      if (!value) return;
+      setStartedAt(time);
+    }
+    setNow(time);
     if (strict && value.endsWith(" ")) lockedLength.current = value.length;
     setTyped(value.slice(0, 20_000));
-  }, [finished, startedAt, strict]);
+  }, [finished, kind, seconds, startedAt, strict]);
 
-  const rawSamples=history.map(value=>value.raw).filter(value=>value>0);const rawMean=rawSamples.length?rawSamples.reduce((sum,value)=>sum+value,0)/rawSamples.length:0;const deviation=rawSamples.length?Math.sqrt(rawSamples.reduce((sum,value)=>sum+(value-rawMean)**2,0)/rawSamples.length):0;const consistency=rawMean?Math.max(0,Math.round(100-deviation/rawMean*100)):100;
-  return { target, typed, input, reset, remaining, elapsedMs, rawWpm, wpm, accuracy, errors, characterStats, consistency, history, finished, running, progress: target.length ? typed.length / target.length * 100 : 0 };
+  const rawSamples=history.map(value=>value.raw);const rawMean=rawSamples.length?rawSamples.reduce((sum,value)=>sum+value,0)/rawSamples.length:0;const deviation=rawSamples.length?Math.sqrt(rawSamples.reduce((sum,value)=>sum+(value-rawMean)**2,0)/rawSamples.length):0;const consistency=rawMean?Math.max(0,Math.round(100-deviation/rawMean*100)):100;
+  return { target, typed, input, reset, remaining, elapsedMs, rawWpm, wpm, accuracy, errors, characterStats, consistency, history, finished, running, progress: score.progress };
 }

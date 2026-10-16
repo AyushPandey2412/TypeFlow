@@ -4,7 +4,17 @@ import { matchmakingSchema, progressSchema, socketCompletionSchema } from "../sr
 import { friendCodeSchema } from "../src/validators/friend.validator.ts";
 
 test("accepts supported matchmaking settings", () => {
-  assert.deepEqual(matchmakingSchema.parse({ mode: "normal", wordCount: 50, numbers: false, punctuation: true }), { mode: "normal", wordCount: 50, numbers: false, punctuation: true });
+  assert.deepEqual(matchmakingSchema.parse({ mode: "normal", wordCount: 50, numbers: false, punctuation: true }), { mode: "normal", wordCount: 50, numbers: false, punctuation: true, playerCount: 3 });
+});
+
+test("supports two- and three-player races and rejects other room sizes", () => {
+  const options = { mode: "normal", wordCount: 50 };
+  for (const playerCount of [2, 3]) {
+    assert.equal(matchmakingSchema.parse({ ...options, playerCount }).playerCount, playerCount);
+  }
+  for (const playerCount of [0, 1, 4, 2.5]) {
+    assert.equal(matchmakingSchema.safeParse({ ...options, playerCount }).success, false);
+  }
 });
 
 test("rejects unsupported matchmaking settings", () => {

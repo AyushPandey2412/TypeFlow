@@ -36,6 +36,7 @@ export function TypingWorkspace() {
   const configKey=`${testKind}-${mode}-${wordCount}-${numbers}-${punctuation}`;
   const localWords=useMemo(()=>generateWords({seed:`solo-${runSeed}`,count:testKind==="time"?200+packetPage*100:wordCount,list:mode==="hard"?"hard":"common",numbers,punctuation}),[mode,numbers,packetPage,punctuation,runSeed,testKind,wordCount]);const words=serverWords||localWords;
   const engine = useTypingEngine(words, duration, mode === "hard", testKind, `${configKey}-${runNumber}`);
+  const resetEngine = engine.reset;
   useEffect(()=>{if(testKind==="time"&&engine.target.length-engine.typed.length<180)setPacketPage(value=>value+1)},[engine.target.length,engine.typed.length,testKind]);
   useEffect(()=>{if(testKind!=="time"||!soloRaceId||!serverWords||engine.target.length-engine.typed.length>=500||extendingPacket.current)return;extendingPacket.current=true;fetch(`/api/races/${soloRaceId}/extend`,{method:"POST"}).then(async response=>{if(response.ok)setServerWords((await response.json()).words)}).finally(()=>{extendingPacket.current=false})},[engine.target.length,engine.typed.length,serverWords,soloRaceId,testKind]);
   useEffect(()=>{const saved=localStorage.getItem("typing-theme");setTheme(saved==="light"||saved==="dark"?saved:matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");setOnline(navigator.onLine);const up=()=>setOnline(true);const down=()=>setOnline(false);window.addEventListener("online",up);window.addEventListener("offline",down);return()=>{window.removeEventListener("online",up);window.removeEventListener("offline",down)}},[]);
@@ -43,7 +44,36 @@ export function TypingWorkspace() {
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("typing-theme",theme)},[theme]);
   useEffect(()=>{if(!settingsOpen)return;const close=(event:PointerEvent)=>{if(!settingsRef.current?.contains(event.target as Node))setSettingsOpen(false)};const escape=(event:KeyboardEvent)=>{if(event.key==="Escape")setSettingsOpen(false)};document.addEventListener("pointerdown",close);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("pointerdown",close);document.removeEventListener("keydown",escape)}},[settingsOpen]);
   useEffect(()=>{setPacketPage(0)},[configKey]);
-  useEffect(()=>{if(!user){setServerWords(null);setSoloRaceId(null);return}setServerWords(null);setSoloRaceId(null);extendingPacket.current=false;fetch("/api/races/solo",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({mode,wordCount:testKind==="time"?100:wordCount,timed:testKind==="time",numbers,punctuation})}).then(async response=>{if(response.ok){const body=await response.json();setServerWords(body.wordPacket.words);setSoloRaceId(body.raceId);submittedRace.current=null;startedRace.current=null}})},[mode,numbers,punctuation,runNumber,testKind,user,wordCount]);
+  useEffect(() => {
+    setServerWords(null);
+    setSoloRaceId(null);
+    extendingPacket.current = false;
+    if (!user) return;
+    const controller = new AbortController();
+    async function createSoloRace() {
+      try {
+        const response = await fetch("/api/races/solo", {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mode, wordCount: testKind === "time" ? 100 : wordCount, timed: testKind === "time", numbers, punctuation }),
+        });
+        if (!response.ok) return;
+        const body = await response.json();
+        if (controller.signal.aborted) return;
+        setServerWords(body.wordPacket.words);
+        setSoloRaceId(body.raceId);
+        submittedRace.current = null;
+        startedRace.current = null;
+        // Server-issued words start with a fresh clock and input buffer.
+        resetEngine();
+      } catch (error) {
+        if (!controller.signal.aborted) console.error("Unable to create solo race", error);
+      }
+    }
+    void createSoloRace();
+    return () => controller.abort();
+  }, [duration, resetEngine, mode, numbers, punctuation, runNumber, testKind, user, wordCount]);
   useEffect(()=>{if(!soloRaceId||!engine.typed||startedRace.current===soloRaceId)return;startedRace.current=soloRaceId;fetch(`/api/races/${soloRaceId}/start`,{method:"POST"})},[engine.typed,soloRaceId]);
   useEffect(()=>{if(!engine.finished||!soloRaceId||submittedRace.current===soloRaceId||engine.elapsedMs<500)return;submittedRace.current=soloRaceId;fetch(`/api/races/${soloRaceId}/complete`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({typedText:engine.typed,durationMs:engine.elapsedMs})})},[engine.elapsedMs,engine.finished,engine.typed,soloRaceId]);
   useEffect(()=>{if(!engine.finished)return;const frame=requestAnimationFrame(()=>resultsSection.current?.scrollIntoView({behavior:"smooth",block:"start"}));return()=>cancelAnimationFrame(frame)},[engine.finished]);
