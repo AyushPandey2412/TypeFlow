@@ -56,6 +56,15 @@ The web application runs at `http://localhost:3000`; the server defaults to `htt
 - Friends can create expiring private two-player invitations and inspect head-to-head races, wins, losses, draws, accuracy, and average WPM.
 - Friend invitations expire after 15 minutes; completed statistics are derived from validated multiplayer results rather than separate duplicated counters.
 
+## Touch typing course
+
+- `/learn` includes 25 lessons from home-row anchors through all letters, numbers, punctuation, and sentences.
+- Two successful full rounds at the lesson's accuracy target unlock the next lesson. Focused missed-key drills do not count toward mastery.
+- Lesson history tracks accuracy, mistakes by key, completed practice time, and completed rounds. Practice resumes at the next unfinished lesson.
+- Anonymous progress stays on the device. Registered users sync progress to MongoDB through `/api/learn/progress`, with a separate local backup for each account.
+- Use **Import device practice** to copy earlier device-only progress into a signed-in account. Existing completed lessons retain mastery.
+- Learning input supports physical and mobile keyboards; visual finger guidance assumes a US QWERTY layout.
+
 ## Security and operations
 
 - Passwords use Argon2id. Legacy bcrypt hashes are upgraded after a successful login.

@@ -3,6 +3,6 @@ import { getCurrentUser } from "../../../../../server/src/services/auth.service.
 import { apiError, authIdentity, connectDatabase } from "../../../../lib/server-backend";
 
 export async function GET(request: NextRequest) {
-  try { await connectDatabase(); return NextResponse.json({ user: await getCurrentUser(authIdentity(request)) }); }
+  try { const identity = authIdentity(request); await connectDatabase(); return NextResponse.json({ user: await getCurrentUser(identity) }); }
   catch (error) { return apiError(error); }
 }

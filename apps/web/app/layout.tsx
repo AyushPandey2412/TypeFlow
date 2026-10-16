@@ -5,6 +5,7 @@ import "./learn.css";
 import "./learn-polish.css";
 import "./learn-shift.css";
 import "./learn-theory.css";
+import "./learn-progress.css";
 import "./tour.css";
 import "./settings.css";
 import { Providers } from "./providers";

@@ -1,19 +1,19 @@
-import { fingerByKey, fingerLabels, fingersForExpectedKey, isUppercaseLetter, keyLabel, type FingerId } from "./course";
+import { fingerByKey, fingerLabels, fingersForExpectedKey, needsShift, physicalKey, keyLabel, type FingerId } from "./course";
 
-const rows = [["1","2","3","4","5","6","7","8","9","0"],["q","w","e","r","t","y","u","i","o","p"],["a","s","d","f","g","h","j","k","l",";"],["shift-left","z","x","c","v","b","n","m",",",".","/","shift-right"],[" "]];
+const rows = [["1","2","3","4","5","6","7","8","9","0"],["q","w","e","r","t","y","u","i","o","p"],["a","s","d","f","g","h","j","k","l",";","'"],["shift-left","z","x","c","v","b","n","m",",",".","/","shift-right"],[" "]];
 const shortFinger: Record<FingerId, string> = { "left-pinky":"LP", "left-ring":"LR", "left-middle":"LM", "left-index":"LI", "right-index":"RI", "right-middle":"RM", "right-ring":"RR", "right-pinky":"RP", thumb:"TH" };
 
 export function VisualKeyboard({ expected, pressed, allowed, uppercaseLegends = false }: { expected: string; pressed: string | null; allowed: string[]; uppercaseLegends?: boolean }) {
-  const normalizedExpected = expected.toLowerCase();
+  const normalizedExpected = physicalKey(expected);
   const expectedFingers = fingersForExpectedKey(expected);
-  const shiftKey = isUppercaseLetter(expected) ? (expectedFingers[0].startsWith("left") ? "shift-right" : "shift-left") : null;
-  const normalizedAllowed = allowed.map(key => key.toLowerCase());
+  const shiftKey = needsShift(expected) ? (expectedFingers[0].startsWith("left") ? "shift-right" : "shift-left") : null;
+  const normalizedAllowed = allowed.map(physicalKey);
   return <div className="learn-keyboard" role="img" aria-label={`Keyboard finger map. Next key ${keyLabel(expected)}`}>
-    {rows.map((row, rowIndex) => <div className="keyboard-row" key={rowIndex}>{row.map(key => {
+    {rows.map((row, rowIndex) => <div className="keyboard-row" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }} key={rowIndex}>{row.map(key => {
       const finger = fingerByKey[key];
       const isShift = key.startsWith("shift-");
       const isExpected = key === normalizedExpected || key === shiftKey;
-      const isError = !isShift && key === pressed?.toLowerCase() && pressed !== expected;
+      const isError = !isShift && pressed !== null && key === physicalKey(pressed) && pressed !== expected;
       const state = isError ? "error" : isExpected ? "expected" : normalizedAllowed.includes(key) ? "lesson" : "idle";
       const label = isShift ? "Shift" : uppercaseLegends && /^[a-z]$/.test(key) ? key.toUpperCase() : keyLabel(key);
       return <div className="keyboard-key" data-state={state} data-finger={finger} data-key-type={isShift ? "shift" : "standard"} key={key} aria-label={`${label}, ${fingerLabels[finger]}`}><span>{label}</span>{state !== "idle" && <small>{shortFinger[finger]}</small>}{(key === "f" || key === "j") && <i/>}</div>;

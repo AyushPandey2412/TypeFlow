@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as auth from "../../../../../server/src/services/auth.service.js";
 import { credentialsSchema, registrationSchema } from "../../../../../server/src/validators/auth.validator.js";
 import { apiError, connectDatabase, requestMeta, requireSameOrigin, secureCookie } from "../../../../lib/server-backend";
+import { HttpError } from "../../../../../server/src/lib/http-error.js";
 
 const refreshCookie = "typing_refresh";
 const allowed = new Set(["register", "login", "refresh", "logout", "guest"]);
@@ -11,6 +12,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     requireSameOrigin(request);
     const { action } = await context.params;
     if (!allowed.has(action)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (action === "refresh" && !request.cookies.get(refreshCookie)?.value) throw new HttpError(401, "Refresh token required");
     await connectDatabase();
     if (action === "logout") {
       await auth.logout(request.cookies.get(refreshCookie)?.value);

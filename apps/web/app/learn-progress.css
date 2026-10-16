@@ -1,0 +1,13 @@
+.learning-dashboard{display:flex;align-items:center;flex-wrap:wrap;gap:20px;padding:20px 0;border-bottom:1px solid var(--line)}
+.learning-dashboard>div{display:grid;gap:4px;min-width:105px}.learning-dashboard b{font:20px var(--font-mono);color:var(--accent)}
+.learning-dashboard span,.learning-dashboard p{font-size:11px;color:var(--muted)}.learning-dashboard p{flex:1;min-width:180px;line-height:1.5;margin:0}
+.learning-dashboard button{font-size:11px}.lesson-key-list{flex-wrap:wrap}.lesson-input-label{display:grid;gap:7px;margin-top:16px;font-size:11px;color:var(--muted)}
+.lesson-input{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);font:16px var(--font-mono)}
+.lesson-input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.lesson-result-actions{flex-wrap:wrap}
+.lesson-history{margin-top:24px;padding:16px;border:1px solid var(--line);border-radius:6px}.lesson-history>strong{font-size:12px}
+.lesson-history ol{display:flex;gap:8px;align-items:flex-end;list-style:none;margin:18px 0;padding:0;height:95px}.lesson-history li{height:100%;flex:1;max-width:48px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px}
+.lesson-history li>span{display:block;background:var(--accent);width:60%;min-height:4px;border-radius:3px 3px 0 0}.lesson-history li>b{font:10px var(--font-mono);color:var(--muted)}
+.learn-keyboard .keyboard-row:nth-child(3),.learn-keyboard .keyboard-row:nth-child(4){padding-left:0}
+.learn-layout .lesson-rail{max-height:calc(100dvh - 170px);overflow-y:auto;position:sticky;top:0;align-self:start}
+@media(max-width:850px){.learn-layout .lesson-rail{max-height:none;position:static;overflow-y:hidden;width:100%;box-sizing:border-box}}
+@media(max-width:560px){.learning-dashboard{gap:14px}.learning-dashboard>div{min-width:80px}.learning-dashboard b{font-size:17px}.learning-dashboard p{flex-basis:100%}.lesson-result-actions button{width:100%;justify-content:center}.lesson-input{padding:14px}.lesson-rail{scroll-snap-type:x proximity}.lesson-rail button{scroll-snap-align:start}}

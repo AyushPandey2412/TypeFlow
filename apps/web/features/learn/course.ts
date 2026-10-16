@@ -1,6 +1,6 @@
 export type FingerId = "left-pinky" | "left-ring" | "left-middle" | "left-index" | "right-index" | "right-middle" | "right-ring" | "right-pinky" | "thumb";
 export type TeachingStep = { title: string; detail: string; kind: "anchor" | "hand" | "movement" };
-export type Lesson = { id: string; number: number; title: string; summary: string; theory: string; goal: string; keys: string[]; target: string; passAccuracy: number; technique: "home" | "space" | "shift"; steps: TeachingStep[] };
+export type Lesson = { id: string; number: number; title: string; summary: string; theory: string; goal: string; keys: string[]; target: string; passAccuracy: number; technique: "home" | "space" | "shift" | "reach"; steps: TeachingStep[] };
 
 export const fingerLabels: Record<FingerId, string> = { "left-pinky":"Left pinky", "left-ring":"Left ring", "left-middle":"Left middle", "left-index":"Left index", "right-index":"Right index", "right-middle":"Right middle", "right-ring":"Right ring", "right-pinky":"Right pinky", thumb:"Thumb" };
 export const fingerByKey: Record<string, FingerId> = {
@@ -13,13 +13,37 @@ export const fingerByKey: Record<string, FingerId> = {
   "9":"right-ring",o:"right-ring",l:"right-ring",".":"right-ring",
   "0":"right-pinky",p:"right-pinky",";":"right-pinky","/":"right-pinky"," ":"thumb",
   "shift-left":"left-pinky","shift-right":"right-pinky",
+  "'":"right-pinky","[":"right-pinky","]":"right-pinky","-":"right-pinky","=":"right-pinky",
 };
+
+export const shiftedKeys: Record<string, string> = { "!":"1", "@":"2", "#":"3", "$":"4", "%":"5", "^":"6", "&":"7", "*":"8", "(":"9", ")":"0", ":":";", '"':"'", "?":"/", "<":",", ">":".", "_":"-", "+":"=", "{":"[", "}":"]" };
+export function physicalKey(key: string) { return shiftedKeys[key] || key.toLowerCase(); }
+export function needsShift(key: string) { return isUppercaseLetter(key) || key in shiftedKeys; }
 
 const homeSteps: TeachingStep[] = [
   { kind:"anchor", title:"Find f and j", detail:"Use the raised markers without looking down." },
   { kind:"hand", title:"Rest on the home row", detail:"Left hand on asdf, right hand on jkl;." },
   { kind:"movement", title:"Return after every press", detail:"Move only the assigned finger, then return it home." },
 ];
+
+const extensions = [
+  { id:"top-index", title:"Top row: r and u", keys:["r","u"], target:"frf juj fur rug rush sugar guard", summary:"Reach up with your index fingers." },
+  { id:"top-middle", title:"Top row: e and i", keys:["e","i"], target:"ded kik red ride fire slide field", summary:"Reach up from d and k with your middle fingers." },
+  { id:"top-ring", title:"Top row: w and o", keys:["w","o"], target:"sws lol low slow word wood flower", summary:"Use your ring fingers for w and o." },
+  { id:"top-pinky", title:"Top row: q and p", keys:["q","p"], target:"aqa ;p; quip equip equal paper power", summary:"Reach gently with the pinkies, then return home." },
+  { id:"top-inner", title:"Top row: t and y", keys:["t","y"], target:"ftf jyj type quiet try trust your style", summary:"Let each index finger cover its inner top-row key." },
+  { id:"bottom-index", title:"Bottom row: v and m", keys:["v","m"], target:"fvf jmj move five vivid movie smile", summary:"Reach down with your index fingers." },
+  { id:"bottom-middle", title:"Bottom row: c and comma", keys:["c",","], target:"dcd k,k calm, clear, clever, music,", summary:"Use the middle fingers for c and comma." },
+  { id:"bottom-ring", title:"Bottom row: x and period", keys:["x","."], target:"sxs l.l mix. six. relax. exercise.", summary:"Use the ring fingers for x and period." },
+  { id:"bottom-pinky", title:"Bottom row: z and slash", keys:["z","/"], target:"aza ;/; zero / size / quiz / lazy", summary:"Use a light pinky reach for z and slash." },
+  { id:"bottom-inner", title:"Bottom row: b and n", keys:["b","n"], target:"fbf jnj begin bright bring balance learn", summary:"Reach down and inward with the index fingers." },
+  { id:"numbers-left", title:"Numbers: left hand", keys:["1","2","3","4","5"], target:"a1a s2s d3d f4f f5f 12 34 45 51", summary:"Reach from the home row to numbers 1 through 5." },
+  { id:"numbers-right", title:"Numbers: right hand", keys:["6","7","8","9","0"], target:"j6j j7j k8k l9l ;0; 67 89 90 2026", summary:"Add numbers 6 through 0 with your right hand." },
+  { id:"punctuation", title:"Quotes and punctuation", keys:["'",":","?","!"], target:"it's clear. is it? yes! time: 10:30", summary:"Use the right pinky for quotes; use opposite Shift for symbols." },
+  { id:"capitals", title:"Capitals across the keyboard", keys:[..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"], target:"ABCDEFGHIJKLMNOPQRSTUVWXYZ Begin Now Read Type Each Idea Calm Move", summary:"Apply opposite-hand Shift to every row." },
+  { id:"sentences", title:"Build a steady sentence rhythm", keys:[".",",","?","!"], target:"Read ahead, then type. Bring calm hands to every word. Is it clear? Yes!", summary:"Combine the keyboard in complete sentences." },
+];
+
 const spaceSteps: TeachingStep[] = [
   { kind:"anchor", title:"Keep eight fingers home", detail:"Leave asdf and jkl; in their resting positions." },
   { kind:"hand", title:"Choose one thumb", detail:"Use the same comfortable thumb for every space." },
@@ -44,11 +68,23 @@ export const beginnerLessons: Lesson[] = [
   { id:"uppercase", number:10, title:"Capital letters with Shift", summary:"Hold Shift with the opposite pinky while pressing a letter.", theory:"A capital is made by holding Shift while pressing a letter. Use the Shift key on the opposite hand so the letter finger can move freely.", goal:"Coordinate two hands, then release both keys and return home.", keys:["F","J","D","K","S","L","A"], target:"F J D K S L A F J", passAccuracy:95, technique:"shift", steps:shiftSteps },
 ];
 
+extensions.forEach((item, index) => {
+  beginnerLessons.push({ ...item, number: index + 11, passAccuracy: 95, technique: "reach",
+    theory: `${item.summary} Keep your wrists relaxed and return each finger to its home key after a reach. Accuracy comes before speed.`,
+    goal: "Complete two varied rounds with at least 95% accuracy. Keep your hands relaxed.",
+    steps: [
+      { kind:"anchor", title:"Start from the home row", detail:"Find f and j by touch, with the other fingers on asdf and jkl;." },
+      { kind:"hand", title:"Check the finger map", detail:"The highlighted key and finger guide show which finger makes the reach. Use opposite-hand Shift for capitals and symbols." },
+      { kind:"movement", title:"Reach and return", detail:"Move the assigned finger, press lightly, and return home before the next key." },
+    ],
+  });
+});
+
 export function keyLabel(key: string) { return key === " " ? "Space" : key; }
 export function isUppercaseLetter(key: string) { return /^[A-Z]$/.test(key); }
 export function fingersForExpectedKey(key: string): FingerId[] {
   if (key === " ") return ["thumb"];
-  const letterFinger = fingerByKey[key.toLowerCase()] || "thumb";
-  if (!isUppercaseLetter(key)) return [letterFinger];
+  const letterFinger = fingerByKey[physicalKey(key)] || "thumb";
+  if (!needsShift(key)) return [letterFinger];
   return [letterFinger, letterFinger.startsWith("left") ? "right-pinky" : "left-pinky"];
 }
