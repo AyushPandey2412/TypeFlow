@@ -1,18 +1,34 @@
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  public readonly status: number;
+  constructor(message: string, status: number) {
     super(message);
+    this.status = status;
     this.name = "ApiError";
   }
 }
 
+let pendingRefresh: Promise<boolean> | null = null;
+
+function refreshSession() {
+  pendingRefresh ??= fetch("/api/auth/refresh", { method: "POST" })
+    .then(response => response.ok)
+    .finally(() => { pendingRefresh = null; });
+  return pendingRefresh;
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const options = {
     ...init,
     headers: {
       ...(init?.body ? { "content-type": "application/json" } : {}),
       ...init?.headers,
     },
-  });
+  };
+  let response = await fetch(path, options);
+  // Share token rotation across concurrent requests and retry only once.
+  if (response.status === 401 && path.startsWith("/api/") && (!path.startsWith("/api/auth/") || path === "/api/auth/me")) {
+    if (await refreshSession()) response = await fetch(path, options);
+  }
   const text = await response.text();
   let body: unknown = {};
   try {

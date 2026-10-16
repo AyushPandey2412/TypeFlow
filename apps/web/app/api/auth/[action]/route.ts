@@ -18,7 +18,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
       response.cookies.delete("typing_access"); response.cookies.delete(refreshCookie);
       return response;
     }
-    if (action === "guest") return sessionResponse(await auth.createGuest(), 201, false);
+    if (action === "guest") {
+      await auth.logout(request.cookies.get(refreshCookie)?.value);
+      return sessionResponse(await auth.createGuest(), 201, false);
+    }
     const session = action === "refresh"
       ? await auth.refresh(request.cookies.get(refreshCookie)?.value || "", requestMeta(request))
       : action === "register"
@@ -32,5 +35,6 @@ function sessionResponse(session: { user: unknown; accessToken: string; refreshT
   const response = NextResponse.json({ user: session.user }, { status });
   response.cookies.set("typing_access", session.accessToken, { httpOnly: true, secure: secureCookie, sameSite: "lax", path: "/", maxAge: 15 * 60 });
   if (persistent && session.refreshToken) response.cookies.set(refreshCookie, session.refreshToken, { httpOnly: true, secure: secureCookie, sameSite: "lax", path: "/", maxAge: auth.refreshMaxAge / 1000 });
+  if (!persistent) response.cookies.delete(refreshCookie);
   return response;
 }

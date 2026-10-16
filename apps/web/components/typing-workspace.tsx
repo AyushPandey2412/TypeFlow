@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTypingEngine } from "../hooks/use-typing-engine";
 import { useAuth } from "../stores/auth";
+import { apiRequest } from "../services/api-client";
+import { authService } from "../services/auth.service";
 import { AuthDialog } from "./auth-dialog";
 import { Multiplayer } from "./multiplayer";
 import { TypingLines } from "./typing-lines";
@@ -32,13 +34,13 @@ export function TypingWorkspace() {
   const [runSeed,setRunSeed]=useState("initial");const [runNumber,setRunNumber]=useState(0);
   const [wordCount,setWordCount]=useState<25|50|100>(50); const [numbers,setNumbers]=useState(false); const [punctuation,setPunctuation]=useState(false); const [authOpen,setAuthOpen]=useState(false); const [raceSetupOpen,setRaceSetupOpen]=useState(false);const [playerCount,setPlayerCount]=useState<2|3>(3);const [activeRace,setActiveRace]=useState<(RaceOptions&{inviteCode?:string;roomMode?:"create"|"join";roomCode?:string})|null>(null); const [settingsOpen,setSettingsOpen]=useState(false);
   const [layout,setLayout]=useState<"monkey"|"lines">("monkey");
-  const user=useAuth(s=>s.user); const setUser=useAuth(s=>s.setUser); const setHydrated=useAuth(s=>s.setHydrated); const clear=useAuth(s=>s.clear);
+  const user=useAuth(s=>s.user); const clear=useAuth(s=>s.clear);
   const configKey=`${testKind}-${mode}-${wordCount}-${numbers}-${punctuation}`;
   const localWords=useMemo(()=>generateWords({seed:`solo-${runSeed}`,count:testKind==="time"?200+packetPage*100:wordCount,list:mode==="hard"?"hard":"common",numbers,punctuation}),[mode,numbers,packetPage,punctuation,runSeed,testKind,wordCount]);const words=serverWords||localWords;
   const engine = useTypingEngine(words, duration, mode === "hard", testKind, `${configKey}-${runNumber}`);
   const resetEngine = engine.reset;
   useEffect(()=>{if(testKind==="time"&&engine.target.length-engine.typed.length<180)setPacketPage(value=>value+1)},[engine.target.length,engine.typed.length,testKind]);
-  useEffect(()=>{if(testKind!=="time"||!soloRaceId||!serverWords||engine.target.length-engine.typed.length>=500||extendingPacket.current)return;extendingPacket.current=true;fetch(`/api/races/${soloRaceId}/extend`,{method:"POST"}).then(async response=>{if(response.ok)setServerWords((await response.json()).words)}).finally(()=>{extendingPacket.current=false})},[engine.target.length,engine.typed.length,serverWords,soloRaceId,testKind]);
+  useEffect(()=>{if(testKind!=="time"||!soloRaceId||!serverWords||engine.target.length-engine.typed.length>=500||extendingPacket.current)return;extendingPacket.current=true;apiRequest<{words:string[]}>(`/api/races/${soloRaceId}/extend`,{method:"POST"}).then(body=>setServerWords(body.words)).catch(error=>console.error("Unable to extend solo race",error)).finally(()=>{extendingPacket.current=false})},[engine.target.length,engine.typed.length,serverWords,soloRaceId,testKind]);
   useEffect(()=>{const saved=localStorage.getItem("typing-theme");setTheme(saved==="light"||saved==="dark"?saved:matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");setOnline(navigator.onLine);const up=()=>setOnline(true);const down=()=>setOnline(false);window.addEventListener("online",up);window.addEventListener("offline",down);return()=>{window.removeEventListener("online",up);window.removeEventListener("offline",down)}},[]);
   useEffect(()=>{setRunSeed(crypto.randomUUID())},[]);
   useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("typing-theme",theme)},[theme]);
@@ -52,14 +54,12 @@ export function TypingWorkspace() {
     const controller = new AbortController();
     async function createSoloRace() {
       try {
-        const response = await fetch("/api/races/solo", {
+        const body = await apiRequest<{ raceId: string; wordPacket: { words: string[] } }>("/api/races/solo", {
           method: "POST",
           signal: controller.signal,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ mode, wordCount: testKind === "time" ? 100 : wordCount, timed: testKind === "time", numbers, punctuation }),
         });
-        if (!response.ok) return;
-        const body = await response.json();
         if (controller.signal.aborted) return;
         setServerWords(body.wordPacket.words);
         setSoloRaceId(body.raceId);
@@ -74,11 +74,10 @@ export function TypingWorkspace() {
     void createSoloRace();
     return () => controller.abort();
   }, [duration, resetEngine, mode, numbers, punctuation, runNumber, testKind, user, wordCount]);
-  useEffect(()=>{if(!soloRaceId||!engine.typed||startedRace.current===soloRaceId)return;startedRace.current=soloRaceId;fetch(`/api/races/${soloRaceId}/start`,{method:"POST"})},[engine.typed,soloRaceId]);
-  useEffect(()=>{if(!engine.finished||!soloRaceId||submittedRace.current===soloRaceId||engine.elapsedMs<500)return;submittedRace.current=soloRaceId;fetch(`/api/races/${soloRaceId}/complete`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({typedText:engine.typed,durationMs:engine.elapsedMs})})},[engine.elapsedMs,engine.finished,engine.typed,soloRaceId]);
+  useEffect(()=>{if(!soloRaceId||!engine.typed||startedRace.current===soloRaceId)return;startedRace.current=soloRaceId;apiRequest(`/api/races/${soloRaceId}/start`,{method:"POST"}).catch(error=>console.error("Unable to start solo race",error))},[engine.typed,soloRaceId]);
+  useEffect(()=>{if(!engine.finished||!soloRaceId||submittedRace.current===soloRaceId||engine.elapsedMs<500)return;submittedRace.current=soloRaceId;apiRequest(`/api/races/${soloRaceId}/complete`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({typedText:engine.typed,durationMs:engine.elapsedMs})}).catch(error=>console.error("Unable to save solo result",error))},[engine.elapsedMs,engine.finished,engine.typed,soloRaceId]);
   useEffect(()=>{if(!engine.finished)return;const frame=requestAnimationFrame(()=>resultsSection.current?.scrollIntoView({behavior:"smooth",block:"start"}));return()=>cancelAnimationFrame(frame)},[engine.finished]);
-  useEffect(()=>{fetch("/api/auth/refresh",{method:"POST"}).then(async response=>{if(response.ok){const body=await response.json();setUser(body.user)}}).finally(setHydrated)},[setHydrated,setUser]);
-  async function logout(){await fetch("/api/auth/logout",{method:"POST"});clear()}
+  async function logout(){try{await authService.logout();clear()}catch{window.alert("Unable to sign out. Please try again.")}}
   function restart(){setRunSeed(crypto.randomUUID());setRunNumber(value=>value+1)}
   useEffect(()=>{const handle=(event:KeyboardEvent)=>{if(authOpen||event.ctrlKey||event.metaKey||event.altKey)return;const element=event.target as HTMLElement;if(element instanceof HTMLInputElement||element instanceof HTMLTextAreaElement||element instanceof HTMLSelectElement||element.isContentEditable)return;if(event.key==="Escape"){typingInput.current?.blur();return}if(event.key==="Tab"){event.preventDefault();typingInput.current?.focus();return}if(event.key==="Enter"&&engine.finished){event.preventDefault();restart();return}if(event.key==="Backspace"){event.preventDefault();typingInput.current?.focus();engine.input(engine.typed.slice(0,-1));return}if(event.key.length===1){event.preventDefault();typingInput.current?.focus();engine.input(engine.typed+event.key)}};window.addEventListener("keydown",handle);return()=>window.removeEventListener("keydown",handle)},[authOpen,engine]);
   if(activeRace&&user)return <main><Multiplayer {...activeRace} onClose={()=>setActiveRace(null)}/></main>;
