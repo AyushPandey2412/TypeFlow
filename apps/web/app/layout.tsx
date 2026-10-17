@@ -11,22 +11,22 @@ import "./settings.css";
 import { Providers } from "./providers";
 import { SiteFooter } from "../components/site-footer";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const siteUrl = "https://typeflowlive.vercel.app";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "Typeflow - Free Typing Speed Test and Live Races", template: "%s | Typeflow" },
-  description: "Measure WPM and accuracy with a focused typing test, practice continuous text, track results, and race friends live.",
+  title: { default: "Free Typing Speed Test & WPM Practice | Typeflow", template: "%s | Typeflow" },
+  description: "Take a free typing speed test in 15, 30, 60 or 120 seconds. Measure WPM and accuracy, learn touch typing, and race friends in private multiplayer rooms.",
   applicationName: "Typeflow",
   keywords: ["typing speed test", "WPM test", "typing practice", "typing accuracy test", "multiplayer typing race"],
   authors: [{ name: "Typeflow" }], creator: "Typeflow", publisher: "Typeflow",
   alternates: { canonical: "/" },
-  openGraph: { type: "website", url: "/", siteName: "Typeflow", title: "Typeflow - Free Typing Speed Test", description: "Test your WPM and accuracy, practice focused typing, and race friends live." },
-  twitter: { card: "summary_large_image", title: "Typeflow - Free Typing Speed Test", description: "Test your WPM and accuracy, practice focused typing, and race friends live." },
+  openGraph: { type: "website", siteName: "Typeflow", locale: "en_US", images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "Typeflow — free typing speed test, touch typing practice and live races" }] },
+  twitter: { card: "summary_large_image", images: ["/opengraph-image"] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } },
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#090a0c" }, { media: "(prefers-color-scheme: light)", color: "#f7f7f8" }] };
 
 export default function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const structuredData = { "@context": "https://schema.org", "@type": "WebApplication", name: "Typeflow", url: siteUrl, applicationCategory: "EducationalApplication", operatingSystem: "Any", isAccessibleForFree: true, description: "A free typing speed test, practice tool, and multiplayer typing race application." };
+  const structuredData = { "@context": "https://schema.org", "@graph": [{ "@type": "WebSite", "@id": `${siteUrl}/#website`, name: "Typeflow", alternateName: "Typeflow Live", url: siteUrl, inLanguage: "en" }, { "@type": "WebApplication", "@id": `${siteUrl}/#app`, name: "Typeflow", url: siteUrl, applicationCategory: "EducationalApplication", operatingSystem: "Any", isAccessibleForFree: true, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" }, featureList: ["Timed typing speed tests", "WPM and accuracy measurement", "Touch typing lessons", "Private multiplayer typing races"], description: "A free typing speed test, practice tool, and multiplayer typing race application." }] };
   return <html lang="en" suppressHydrationWarning><body suppressHydrationWarning><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}/><Providers>{children}<SiteFooter/></Providers></body></html>;
 }
