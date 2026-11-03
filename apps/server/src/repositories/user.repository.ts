@@ -3,6 +3,7 @@ export const users = {
   existsByUsernameOrEmail: (username:string,email:string) => User.exists({$or:[{username},{email}]}),
   create: (input:{username:string;email:string;password:string}) => User.create(input),
   findByUsername: (username:string) => User.findOne({username}),
+  findByEmail: (email:string) => User.findOne({email}),
   findById: (id:string) => User.findById(id),
   findByFriendCode: (friendCode:string) => User.findOne({friendCode}),
   withFriends: (id:string) => User.findById(id).populate("friendIds","username friendCode"),

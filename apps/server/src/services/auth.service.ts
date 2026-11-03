@@ -20,10 +20,18 @@ async function authenticatedSession(user: any, meta: RequestMeta, familyId?: str
 export async function register(input: Registration, meta: RequestMeta) {
   if (await users.existsByUsernameOrEmail(input.username,input.email)) throw new HttpError(409, "Username or email already exists");
   const password = await argon2.hash(input.password, { type: argon2.argon2id });
-  return authenticatedSession(await users.create({ ...input, password }), meta);
+  let user;
+  try { user = await users.create({ ...input, password }); }
+  catch (error) {
+    if (typeof error === "object" && error && "code" in error && error.code === 11000) throw new HttpError(409, "Username or email already exists");
+    throw error;
+  }
+  return authenticatedSession(user, meta);
 }
 export async function login(input: Credentials, meta: RequestMeta) {
-  const user = await users.findByUsername(input.username);
+  const user = input.username.includes("@")
+    ? await users.findByEmail(input.username.toLowerCase())
+    : await users.findByUsername(input.username);
   if (!user) throw new HttpError(401, "Invalid credentials");
   const legacy = !user.password.startsWith("$argon2");
   const valid = legacy ? await bcrypt.compare(input.password, user.password) : await argon2.verify(user.password, input.password);

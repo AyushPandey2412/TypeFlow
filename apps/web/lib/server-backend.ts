@@ -10,7 +10,7 @@ declare global { var typeflowMongoConnection: Promise<typeof mongoose> | undefin
 
 export function connectDatabase() {
   if (mongoose.connection.readyState === 1) return Promise.resolve(mongoose);
-  globalThis.typeflowMongoConnection ??= mongoose.connect(env.MONGO_URI, { maxPoolSize: 10 });
+  globalThis.typeflowMongoConnection ??= mongoose.connect(env.MONGO_URI, { maxPoolSize: 10, serverSelectionTimeoutMS: 10_000 });
   return globalThis.typeflowMongoConnection.catch(error => { globalThis.typeflowMongoConnection = undefined; throw error; });
 }
 
@@ -33,6 +33,10 @@ export function registeredUserId(request: NextRequest) { const identity = authId
 export function apiError(error: unknown) {
   if (error instanceof HttpError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof ZodError) return NextResponse.json({ error: error.issues[0]?.message || "Invalid request" }, { status: 400 });
+  if (error instanceof Error && (error.name === "MongooseServerSelectionError" || error.name === "MongoServerSelectionError")) {
+    console.error("Database connection failed", error);
+    return NextResponse.json({ error: "Cannot connect to the database. Please try again shortly." }, { status: 503 });
+  }
   console.error("API request failed", error); if(error instanceof Error&&error.message.includes("REDIS_URL"))return NextResponse.json({error:"Multiplayer storage is not configured yet"},{status:503});return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }
 
