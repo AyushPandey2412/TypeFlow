@@ -8,17 +8,32 @@ import { calculateScore } from "../../server/src/services/scoring.service.js";
 
 export type Identity = { id: string; displayName: string; role: "user" | "guest" };
 type StoredPlayer = Player & { identity: Identity; socketId: string };
-export type StoredRoom = { id: string; mongoId: string; status: "waiting" | "countdown" | "running" | "finished"; players: Record<string, StoredPlayer>; packet: WordPacket; wordCount: 25 | 50 | 100; maxPlayers: number; inviteCode?: string; results: RaceResult[]; completedPlayerIds: string[]; createdAt: number; startsAt?: number };
+export type StoredRoom = {
+  id: string;
+  mongoId: string;
+  status: "waiting" | "countdown" | "running" | "finished" | "cancelled";
+  players: Record<string, StoredPlayer>;
+  packet: WordPacket;
+  wordCount: 25 | 50 | 100;
+  maxPlayers: number;
+  inviteCode?: string;
+  hostId: string;
+  results: RaceResult[];
+  completedPlayerIds: string[];
+  createdAt: number;
+  startsAt?: number;
+};
 type Options = { mode: RaceMode; wordCount: 25 | 50 | 100; playerCount?: 2 | 3; numbers: boolean; punctuation: boolean; inviteCode?: string };
 
 const roomKey = (id: string) => `typeflow:room:${id}`;
 const playerKey = (id: string) => `typeflow:player-room:${id}`;
-const privateRoomKey = (code: string) => `typeflow:private-room:${code}`;
-const queueKey = (options: Options) => `typeflow:queue:${options.inviteCode || "public"}:${options.mode}:${options.wordCount}:${options.playerCount || 3}:${Number(options.numbers)}:${Number(options.punctuation)}`;
+const privateRoomKey = (code: string) => `typeflow:private-room:${code.toUpperCase()}`;
+const inviteRoomKey = (code: string) => `typeflow:invite-room:${code.toUpperCase()}`;
+const queueKey = (options: Options) => `typeflow:queue:${options.mode}:${options.wordCount}:${options.playerCount || 3}:${Number(options.numbers)}:${Number(options.punctuation)}`;
 const publicPlayer = (player: StoredPlayer): Player => ({ id: player.id, displayName: player.displayName, role: player.role, progress: player.progress, wpm: player.wpm, connected: player.connected });
 
 async function load(redis: Redis, id: string) { const value = await redis.get(roomKey(id)); return value ? JSON.parse(value) as StoredRoom : null; }
-async function save(redis: Redis, room: StoredRoom) { await redis.set(roomKey(room.id), JSON.stringify(room), "EX", 600); return room; }
+async function save(redis: Redis, room: StoredRoom) { await redis.set(roomKey(room.id), JSON.stringify(room), "EX", 900); return room; }
 
 async function locked<T>(redis: Redis, key: string, task: () => Promise<T>): Promise<T> {
   const token = randomUUID();
@@ -32,39 +47,116 @@ async function locked<T>(redis: Redis, key: string, task: () => Promise<T>): Pro
   throw new Error("Race state is busy");
 }
 
-export async function matchmake(redis: Redis, socketId: string, identity: Identity, options: Options) {
+export async function matchmake(redis: Redis, socketId: string, identity: Identity, options: Options): Promise<StoredRoom> {
   const previousId = await redis.get(playerKey(identity.id));
   if (previousId) {
     const previous = await load(redis, previousId);
-    if (previous && previous.status !== "finished" && previous.players[identity.id]) {
+    const sameInvite = (!options.inviteCode && !previous?.inviteCode) || (Boolean(options.inviteCode) && previous?.inviteCode === options.inviteCode);
+    if (previous && (previous.status === "waiting" || previous.status === "countdown" || previous.status === "running") && previous.players[identity.id] && sameInvite) {
       previous.players[identity.id] = { ...previous.players[identity.id], socketId, connected: true };
       return save(redis, previous);
+    } else {
+      await redis.del(playerKey(identity.id));
     }
   }
-  return locked(redis, queueKey(options), async () => {
+
+  const lockKey = options.inviteCode ? `invite:${options.inviteCode}` : queueKey(options);
+  return locked(redis, lockKey, async () => {
     let room: StoredRoom | null = null;
-    const queuedId = await redis.get(queueKey(options));
-    if (queuedId) room = await load(redis, queuedId);
-    if (!room || room.status !== "waiting" || Object.keys(room.players).length >= room.maxPlayers) {
+
+    if (options.inviteCode) {
+      const inviteKey = inviteRoomKey(options.inviteCode);
+      const existingRoomId = await redis.get(inviteKey);
+      if (existingRoomId) {
+        room = await load(redis, existingRoomId);
+      }
+    } else {
+      const queuedId = await redis.get(queueKey(options));
+      if (queuedId) {
+        room = await load(redis, queuedId);
+      }
+    }
+
+    const canJoinRoom = room && (room.status === "waiting" || room.players[identity.id] !== undefined) && (Object.keys(room.players).length < room.maxPlayers || room.players[identity.id] !== undefined);
+
+    if (!canJoinRoom || !room) {
       const seed = randomUUID();
       const words = generateWords({ seed, count: Math.max(options.wordCount, 100), list: options.mode === "hard" ? "hard" : "common", numbers: options.numbers, punctuation: options.punctuation });
       const packet: WordPacket = { id: randomUUID(), seed, words, mode: options.mode, includeNumbers: options.numbers, includePunctuation: options.punctuation, issuedAt: new Date().toISOString() };
       const race = await races.create({ kind: "multiplayer", status: "waiting", wordPacket: { packetId: packet.id, ...packet }, participantIds: [identity.id] });
-      room = { id: randomUUID(), mongoId: String(race._id), status: "waiting", players: {}, packet, wordCount: options.wordCount, maxPlayers: options.playerCount || (options.inviteCode ? 2 : 3), inviteCode: options.inviteCode, results: [], completedPlayerIds: [], createdAt: Date.now() };
-      await redis.set(queueKey(options), room.id, "EX", 30);
+      room = {
+        id: randomUUID(),
+        mongoId: String(race._id),
+        status: "waiting",
+        players: {},
+        packet,
+        wordCount: options.wordCount,
+        maxPlayers: options.playerCount || (options.inviteCode ? 2 : 3),
+        inviteCode: options.inviteCode,
+        hostId: identity.id,
+        results: [],
+        completedPlayerIds: [],
+        createdAt: Date.now(),
+      };
+      if (options.inviteCode) {
+        await redis.set(inviteRoomKey(options.inviteCode), room.id, "EX", 900);
+      } else {
+        await redis.set(queueKey(options), room.id, "EX", 45);
+      }
     }
-    room.players[identity.id] = { id: identity.id, displayName: identity.displayName, role: identity.role, progress: 0, wpm: 0, connected: true, identity, socketId };
-    await save(redis, room); await redis.set(playerKey(identity.id), room.id, "EX", 600);
-    await races.update(room.mongoId, { participantIds: Object.keys(room.players) });
-    return room;
+
+    const currentRoom: StoredRoom = room;
+    currentRoom.players[identity.id] = { id: identity.id, displayName: identity.displayName, role: identity.role, progress: 0, wpm: 0, connected: true, identity, socketId };
+    await save(redis, currentRoom);
+    await redis.set(playerKey(identity.id), currentRoom.id, "EX", 900);
+    await races.update(currentRoom.mongoId, { participantIds: Object.keys(currentRoom.players) });
+    return currentRoom;
   });
 }
 
-export function publicRace(room: StoredRoom) { return { id: room.id, kind: "multiplayer" as const, status: room.status, wordPacket: room.packet, players: Object.values(room.players).map(publicPlayer), startsAt: room.startsAt ? new Date(room.startsAt).toISOString() : undefined }; }
+export function publicRace(room: StoredRoom) {
+  return {
+    id: room.id,
+    kind: "multiplayer" as const,
+    status: room.status,
+    wordPacket: room.packet,
+    players: Object.values(room.players).map(publicPlayer),
+    startsAt: room.startsAt ? new Date(room.startsAt).toISOString() : undefined,
+    hostId: room.hostId,
+    roomCode: room.inviteCode,
+  };
+}
 
 export async function begin(redis: Redis, roomId: string) { return locked(redis, roomId, async () => { const room = await load(redis, roomId); if (!room || room.status !== "waiting") return room; room.status = "countdown"; room.startsAt = Date.now() + 3000; await save(redis, room); await races.update(room.mongoId, { status: "countdown", startsAt: new Date(room.startsAt) }); return room; }); }
 export async function markRunning(redis: Redis, roomId: string) { return locked(redis, roomId, async () => { const room = await load(redis, roomId); if (!room || room.status !== "countdown") return room; room.status = "running"; await save(redis, room); await races.update(room.mongoId, { status: "running" }); return room; }); }
 export async function expire(redis: Redis, roomId: string) { return locked(redis, roomId, async () => { const room = await load(redis, roomId); if (!room || room.status === "finished") return room; room.status = "finished"; await save(redis, room); await races.update(room.mongoId, { status: "finished", endsAt: new Date() }); return room; }); }
+
+export async function startRace(redis: Redis, roomId: string, identityId: string) {
+  return locked(redis, roomId, async () => {
+    const room = await load(redis, roomId);
+    if (!room) throw new Error("Room not found");
+    if (room.hostId !== identityId) throw new Error("Only the host can start the race");
+    if (room.status !== "waiting") return room;
+    const now = Date.now();
+    room.status = "countdown";
+    room.startsAt = now + 3000;
+    await save(redis, room);
+    await races.update(room.mongoId, { status: "countdown", startsAt: new Date(room.startsAt) });
+    return room;
+  });
+}
+
+export async function stopRace(redis: Redis, roomId: string, identityId: string) {
+  return locked(redis, roomId, async () => {
+    const room = await load(redis, roomId);
+    if (!room) throw new Error("Room not found");
+    if (room.hostId !== identityId) throw new Error("Only the host can stop the race");
+    room.status = "cancelled";
+    await save(redis, room);
+    await races.update(room.mongoId, { status: "cancelled", endsAt: new Date() });
+    return room;
+  });
+}
 
 export async function updateProgress(redis: Redis, roomId: string, identityId: string, typedText: string) { return locked(redis, roomId, async () => { const room = await load(redis, roomId); const player = room?.players[identityId]; if (!room || !player || !room.startsAt) return null; const score = calculateScore({ target: room.packet.words.join(" "), typedText, durationMs: Math.max(Date.now() - room.startsAt, 1000) }); player.progress = score.progress; player.wpm = score.correctWpm; await save(redis, room); return publicPlayer(player); }); }
 
@@ -79,7 +171,26 @@ export async function complete(redis: Redis, roomId: string, identityId: string,
   await save(redis, room); return room;
 }); }
 
-export async function disconnect(redis: Redis, identityId: string) { const roomId = await redis.get(playerKey(identityId)); if (!roomId) return null; return locked(redis, roomId, async () => { const room = await load(redis, roomId); if (!room?.players[identityId]) return room; room.players[identityId].connected = false; return save(redis, room); }); }
+export async function disconnect(redis: Redis, identityId: string) {
+  const roomId = await redis.get(playerKey(identityId));
+  if (!roomId) return null;
+  await redis.del(playerKey(identityId));
+  return locked(redis, roomId, async () => {
+    const room = await load(redis, roomId);
+    if (!room) return null;
+    const isHost = room.hostId === identityId;
+    delete room.players[identityId];
+    if (isHost && (room.status === "waiting" || room.status === "countdown")) {
+      room.status = "cancelled";
+      await races.update(room.mongoId, { status: "cancelled", endsAt: new Date() });
+    } else if (Object.keys(room.players).length === 0) {
+      room.status = "cancelled";
+      await races.update(room.mongoId, { status: "cancelled", endsAt: new Date() });
+    }
+    await save(redis, room);
+    return room;
+  });
+}
 
 export async function getRoomState(redis: Redis, identityId: string, requestedRoomId?: string) {
   const roomId = requestedRoomId || await redis.get(playerKey(identityId));
@@ -88,10 +199,15 @@ export async function getRoomState(redis: Redis, identityId: string, requestedRo
     const room = await load(redis, roomId);
     if (!room || !room.players[identityId]) return null;
     const now = Date.now();
-    if (room.status === "waiting" && (Object.keys(room.players).length >= room.maxPlayers || now >= room.createdAt + 10_000)) {
-      room.status = "countdown";
-      room.startsAt = now + 3000;
-      await races.update(room.mongoId, { status: "countdown", startsAt: new Date(room.startsAt) });
+    const playerCount = Object.keys(room.players).length;
+
+    if (room.status === "waiting") {
+      const isPublic = !room.inviteCode;
+      if (isPublic && (playerCount >= room.maxPlayers || (playerCount >= 2 && now >= room.createdAt + 10_000))) {
+        room.status = "countdown";
+        room.startsAt = now + 3000;
+        await races.update(room.mongoId, { status: "countdown", startsAt: new Date(room.startsAt) });
+      }
     } else if (room.status === "countdown" && room.startsAt && now >= room.startsAt) {
       room.status = "running";
       await races.update(room.mongoId, { status: "running" });
@@ -109,10 +225,11 @@ export async function createPrivateRoom(redis: Redis, identity: Identity, option
   let code = "";
   for (let attempt = 0; attempt < 8; attempt++) {
     code = randomBytes(3).toString("hex").toUpperCase();
-    if (await redis.set(privateRoomKey(code), JSON.stringify(options), "EX", 900, "NX")) break;
+    if (await redis.set(privateRoomKey(code), "1", "EX", 900, "NX")) break;
   }
   if (!code) throw new Error("Unable to create room code");
   const room = await matchmake(redis, identity.id, identity, { ...options, inviteCode: code });
+  await redis.set(privateRoomKey(code), JSON.stringify({ roomId: room.id, options }), "EX", 900);
   return { room, code };
 }
 
@@ -120,6 +237,38 @@ export async function joinPrivateRoom(redis: Redis, identity: Identity, code: st
   const normalized = code.trim().toUpperCase();
   const value = await redis.get(privateRoomKey(normalized));
   if (!value) return null;
-  const options = JSON.parse(value) as Omit<Options, "inviteCode">;
-  return matchmake(redis, identity.id, identity, { ...options, inviteCode: normalized });
+  try {
+    const data = JSON.parse(value);
+    const roomId = data.roomId;
+    if (roomId) {
+      return locked(redis, roomId, async () => {
+        const room = await load(redis, roomId);
+        if (!room) return null;
+        if (room.status !== "waiting" && !room.players[identity.id]) {
+          return null;
+        }
+        if (Object.keys(room.players).length >= room.maxPlayers && !room.players[identity.id]) {
+          return null;
+        }
+        room.players[identity.id] = {
+          id: identity.id,
+          displayName: identity.displayName,
+          role: identity.role,
+          progress: 0,
+          wpm: 0,
+          connected: true,
+          identity,
+          socketId: identity.id,
+        };
+        await save(redis, room);
+        await redis.set(playerKey(identity.id), room.id, "EX", 900);
+        await races.update(room.mongoId, { participantIds: Object.keys(room.players) });
+        return room;
+      });
+    }
+    const options = data.options || data;
+    return matchmake(redis, identity.id, identity, { ...options, inviteCode: normalized });
+  } catch {
+    return null;
+  }
 }

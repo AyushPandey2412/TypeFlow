@@ -5,29 +5,30 @@ import { races, raceResults } from "../repositories/race.repository.js";
 import { calculateScore } from "./scoring.service.js";
 
 export type Identity = { id: string; displayName: string; role: "user" | "guest" };
-export type RaceRoom = { id: string; mongoId: string; status: "waiting" | "countdown" | "running" | "finished"; players: Map<string, Player & { identity: Identity }>; packet: WordPacket; wordCount:25|50|100; maxPlayers:number; inviteCode?:string; results: ResultType[]; completedPlayerIds: Set<string>; createdAt: number; startsAt?: number; timer?: NodeJS.Timeout; expiryTimer?:NodeJS.Timeout };
+export type RaceRoom = { id: string; mongoId: string; status: "waiting" | "countdown" | "running" | "finished" | "cancelled"; players: Map<string, Player & { identity: Identity }>; packet: WordPacket; wordCount:25|50|100; maxPlayers:number; inviteCode?:string; hostId: string; results: ResultType[]; completedPlayerIds: Set<string>; createdAt: number; startsAt?: number; timer?: NodeJS.Timeout; expiryTimer?:NodeJS.Timeout };
 const rooms = new Map<string, RaceRoom>();
 const disconnectTimers=new Map<string,NodeJS.Timeout>();
 export const getRoom = (id: string) => rooms.get(id);
 
 export async function matchmake(socketId: string, identity: Identity, options: { mode: RaceMode; wordCount: 25 | 50 | 100; numbers: boolean; punctuation: boolean; inviteCode?:string }) {
-  const previous=[...rooms.values()].find(value=>[...value.players.values()].some(player=>player.id===identity.id)&&value.status!=="finished");
+  const previous=[...rooms.values()].find(value=>[...value.players.values()].some(player=>player.id===identity.id)&&(value.status==="waiting"||value.status==="countdown"||value.status==="running")&&((!options.inviteCode&&!value.inviteCode)||(options.inviteCode&&value.inviteCode===options.inviteCode)));
   if(previous){const old=[...previous.players.entries()].find(([,player])=>player.id===identity.id);if(old){previous.players.delete(old[0]);previous.players.set(socketId,{...old[1],connected:true});const timer=disconnectTimers.get(identity.id);if(timer)clearTimeout(timer);disconnectTimers.delete(identity.id);return previous;}}
-  let room = [...rooms.values()].find(value => value.status === "waiting" && value.players.size < value.maxPlayers && value.inviteCode===options.inviteCode && value.packet.mode === options.mode && value.wordCount===options.wordCount && value.packet.includeNumbers===options.numbers && value.packet.includePunctuation===options.punctuation);
+  let room = [...rooms.values()].find(value => value.status === "waiting" && value.players.size < value.maxPlayers && (options.inviteCode ? value.inviteCode === options.inviteCode : (!value.inviteCode && value.packet.mode === options.mode && value.wordCount === options.wordCount && value.packet.includeNumbers === options.numbers && value.packet.includePunctuation === options.punctuation)));
   if (!room) {
     const seed = randomUUID();
     const words = generateWords({ seed, count: Math.max(options.wordCount, 100), list: options.mode === "hard" ? "hard" : "common", numbers: options.numbers, punctuation: options.punctuation });
     const packet: WordPacket = { id: randomUUID(), seed, words, mode: options.mode, includeNumbers: options.numbers, includePunctuation: options.punctuation, issuedAt: new Date().toISOString() };
     const race = await races.create({ kind: "multiplayer", status: "waiting", wordPacket: { packetId: packet.id, ...packet }, participantIds: [identity.id] });
-    room = { id: randomUUID(), mongoId: String(race._id), status: "waiting", players: new Map(), packet, wordCount:options.wordCount, maxPlayers:options.inviteCode?2:3, inviteCode:options.inviteCode, results: [], completedPlayerIds: new Set(), createdAt: Date.now() };
+    room = { id: randomUUID(), mongoId: String(race._id), status: "waiting", players: new Map(), packet, wordCount:options.wordCount, maxPlayers:options.inviteCode?2:3, inviteCode:options.inviteCode, hostId: identity.id, results: [], completedPlayerIds: new Set(), createdAt: Date.now() };
     rooms.set(room.id, room);
   }
   room.players.set(socketId, { id: identity.id, displayName: identity.displayName, role: identity.role, progress: 0, wpm: 0, connected: true, identity });
   await races.update(room.mongoId, { participantIds: [...room.players.values()].map(player => player.id) });
   return room;
 }
-export const publicRace = (room: RaceRoom) => ({ id: room.id, kind: "multiplayer" as const, status: room.status, wordPacket: room.packet, players: [...room.players.values()].map(({ identity: _, ...player }) => player), startsAt: room.startsAt ? new Date(room.startsAt).toISOString() : undefined });
+export const publicRace = (room: RaceRoom) => ({ id: room.id, kind: "multiplayer" as const, status: room.status, wordPacket: room.packet, players: [...room.players.values()].map(({ identity: _, ...player }) => player), startsAt: room.startsAt ? new Date(room.startsAt).toISOString() : undefined, hostId: room.hostId, roomCode: room.inviteCode });
 export function start(room: RaceRoom) { room.status = "countdown"; room.startsAt = Date.now() + 3000; void races.update(room.mongoId, { status: "countdown", startsAt: new Date(room.startsAt) }); }
+export function stop(room: RaceRoom) { room.status = "cancelled"; if(room.timer) clearTimeout(room.timer); if(room.expiryTimer) clearTimeout(room.expiryTimer); void races.update(room.mongoId, { status: "cancelled", endsAt: new Date() }); }
 export function markRunning(room: RaceRoom) { room.status = "running"; void races.update(room.mongoId, { status: "running" }); }
 export function armExpiry(room:RaceRoom,onExpire:()=>void){room.expiryTimer=setTimeout(()=>{if(room.status==="finished")return;room.status="finished";void races.update(room.mongoId,{status:"finished",endsAt:new Date()});onExpire();},130_000);}
 export function stats(room: RaceRoom, typedText: string, durationMs: number) {

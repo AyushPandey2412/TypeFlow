@@ -18,8 +18,28 @@ export function registerRaceNamespace(io: Server<ClientToServerEvents, ServerToC
         const parsed=matchmakingSchema.parse(options);const invite=parsed.inviteCode?await validateRaceInvite(parsed.inviteCode,socket.data.identity.id):null;const matchOptions=invite?{...invite.options,inviteCode:parsed.inviteCode}:parsed;
         const room = await races.matchmake(socket.id, socket.data.identity, matchOptions); socket.join(room.id); race.to(room.id).emit("race:state", races.publicRace(room)); socket.emit("race:packet", room.packet);
         const begin = () => { if (room.status !== "waiting") return; races.start(room); race.to(room.id).emit("race:state", races.publicRace(room)); setTimeout(() => { races.markRunning(room); races.armExpiry(room,()=>{race.to(room.id).emit("race:state",races.publicRace(room));race.to(room.id).emit("race:results",room.results);}); race.to(room.id).emit("race:state", races.publicRace(room)); }, 3000); };
-        if (room.players.size === room.maxPlayers) begin(); else if (!room.inviteCode&&!room.timer) room.timer = setTimeout(begin, 10000);
+        if (room.players.size === room.maxPlayers) begin(); else if (!room.inviteCode&&!room.timer&&room.players.size>=2) room.timer = setTimeout(begin, 10000);
       } catch { socket.emit("race:error", { code: "MATCHMAKE_FAILED", message: "Unable to join a race" }); }
+    });
+    socket.on("race:start" as any, (payload: any) => {
+      const room = races.getRoom(payload?.raceId);
+      if (!room || room.hostId !== socket.data.identity.id || room.status !== "waiting") return;
+      races.start(room);
+      race.to(room.id).emit("race:state", races.publicRace(room));
+      setTimeout(() => {
+        races.markRunning(room);
+        races.armExpiry(room, () => {
+          race.to(room.id).emit("race:state", races.publicRace(room));
+          race.to(room.id).emit("race:results", room.results);
+        });
+        race.to(room.id).emit("race:state", races.publicRace(room));
+      }, 3000);
+    });
+    socket.on("race:stop" as any, (payload: any) => {
+      const room = races.getRoom(payload?.raceId);
+      if (!room || room.hostId !== socket.data.identity.id) return;
+      races.stop(room);
+      race.to(room.id).emit("race:state", races.publicRace(room));
     });
     socket.on("race:progress", payload => { const parsed=progressSchema.safeParse(payload);if(!parsed.success)return;const {raceId,typedText}=parsed.data; const room = races.getRoom(raceId); if (!room) return; const player = races.updateProgress(room, socket.id, typedText); if (player) race.to(room.id).emit("race:player-progress", player); });
     socket.on("race:complete", async payload => {

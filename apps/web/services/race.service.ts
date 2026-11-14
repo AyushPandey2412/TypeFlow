@@ -15,6 +15,8 @@ export const raceService = {
   joinPrivateRoom: (roomCode: string) => postJson<MultiplayerState>("/api/multiplayer/join-room", { roomCode }),
   multiplayerState: (raceId: string) => apiRequest<MultiplayerState>(`/api/multiplayer/state?raceId=${encodeURIComponent(raceId)}`),
   multiplayerProgress: (body: { raceId: string; typedText: string }) => postJson<MultiplayerState>("/api/multiplayer/progress", body),
+  startMultiplayer: (raceId: string) => postJson<MultiplayerState>("/api/multiplayer/start", { raceId }),
+  stopMultiplayer: (raceId: string) => postJson<MultiplayerState>("/api/multiplayer/stop", { raceId }),
   completeMultiplayer: (body: { raceId: string; typedText: string; durationMs: number }) => postJson<MultiplayerState>("/api/multiplayer/complete", body),
   leaveMultiplayer: () => postJson<{ race: Race | null }>("/api/multiplayer/leave", {}),
 };

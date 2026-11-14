@@ -51,6 +51,8 @@ export interface Race {
   players: Player[];
   startsAt?: string;
   endsAt?: string;
+  hostId?: string;
+  roomCode?: string;
 }
 
 export interface RaceResult {

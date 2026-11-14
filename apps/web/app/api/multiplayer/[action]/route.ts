@@ -56,6 +56,16 @@ export async function POST(request: NextRequest, context: Context) {
       const room = await raceState.complete(redis, parsed.raceId, identity.id, parsed.typedText, parsed.durationMs);
       return room ? response(room) : NextResponse.json({ error: "Race not found" }, { status: 404 });
     }
+    if (action === "start") {
+      const { raceId } = z.object({ raceId: z.string().min(1) }).parse(await request.json());
+      const room = await raceState.startRace(redis, raceId, identity.id);
+      return response(room);
+    }
+    if (action === "stop") {
+      const { raceId } = z.object({ raceId: z.string().min(1) }).parse(await request.json());
+      const room = await raceState.stopRace(redis, raceId, identity.id);
+      return response(room);
+    }
     if (action === "leave") {
       const room = await raceState.disconnect(redis, identity.id);
       return NextResponse.json({ race: room ? raceState.publicRace(room) : null });
